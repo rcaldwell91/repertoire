@@ -1040,18 +1040,38 @@ const G = { // per-run game state
 };
 
 /* ---------- song select ---------- */
+let songIdx = 0;
 function fillSongSel(){
   const sel = $('songSel');
+  const keep = sel.value;
   sel.innerHTML='';
+  const g1 = document.createElement('optgroup');
+  g1.label = 'Practice packs — full note bubbles';
   SONGS.forEach((s,i)=>{
-    const o=document.createElement('option'); o.value=i; o.textContent=s.title; sel.appendChild(o);
+    const o=document.createElement('option'); o.value=i; o.textContent=s.title; g1.appendChild(o);
   });
+  sel.appendChild(g1);
+  // LIB is declared in a later part of the bundle: on the very first call it is
+  // still in its temporal dead zone, and `typeof` throws on that too.
+  try{
+    if(LIB && LIB.songs && LIB.songs.length){
+      const g2 = document.createElement('optgroup');
+      g2.label = 'My library — pitch + key rails (no bubbles yet)';
+      LIB.songs.forEach(s=>{
+        const o=document.createElement('option');
+        o.value='lib:'+s.id; o.textContent=s.title+' — '+s.artist;
+        g2.appendChild(o);
+      });
+      sel.appendChild(g2);
+    }
+  }catch(e){ /* library not initialised yet; refreshed once it loads */ }
+  if([...sel.options].some(o=>o.value===keep)) sel.value = keep;
 }
 fillSongSel();
 function applyAudioLock(){
   // a real recording can't time-stretch, so tempo is pinned while it's loaded
-  const s = SONGS[+$('songSel').value];
-  const locked = !!(s && s.audioDataUrl);
+  const s = SONGLIB.song ? null : currentSong();
+  const locked = !!(s && s.audioDataUrl) || !!SONGLIB.song;
   $('rTempo').disabled = locked;
   $('rTempo').style.opacity = locked ? .4 : 1;
   if(locked){
@@ -1062,10 +1082,16 @@ function applyAudioLock(){
   }
 }
 $('songSel').addEventListener('change', ()=>{
-  const s = SONGS[+$('songSel').value];
-  setTranspose(s.transposeDefault||0);
-  applyAudioLock();
   stopRun();
+  const v = String($('songSel').value);
+  if(v.startsWith('lib:')){
+    SONGLIB.song = LIB.songs.find(x=>x.id===v.slice(4)) || null;
+  } else {
+    SONGLIB.song = null;
+    songIdx = +v;
+    setTranspose(currentSong().transposeDefault||0);
+  }
+  applyAudioLock();
 });
 
 /* ---------- controls ---------- */
@@ -1116,7 +1142,7 @@ $('micPillTop').addEventListener('click', ()=>{ if(!MIC.on) enableMic(); });
 /* ---------- transport ---------- */
 function currentSong(){
   if(state.mode==='train' && TRAIN.song) return TRAIN.song;
-  return SONGS[+$('songSel').value];
+  return SONGS[songIdx] || SONGS[0];
 }
 
 function startRun(){
@@ -1142,6 +1168,11 @@ function startRun(){
   }
 }
 function stopRun(showResults){
+  if(SONGLIB.active){
+    libAudio.pause(); SONGLIB.active = false;
+    if(SONGLIB.url){ URL.revokeObjectURL(SONGLIB.url); SONGLIB.url = null; }
+    showResults = false;
+  }
   if(G.packAudio){ G.packAudio.pause(); }
   stopSong();
   G.running=false;
@@ -1157,15 +1188,69 @@ function stopRun(showResults){
     if(state.mode==='song') journeyMark('sing');
   }
 }
+
+/* ---------- singing a Library track inside Practice Songs ----------
+   These have no note map, so instead of bubbles we show the live pitch lane
+   with the song's key lit up. Same stage, same transport.                */
+const SONGLIB = { song:null, active:false, trail:[], t0:0, url:null };
+
+function startLibRun(){
+  const s = SONGLIB.song;
+  if(!s) return;
+  ensureCtx();
+  if(SONGLIB.url) URL.revokeObjectURL(SONGLIB.url);
+  SONGLIB.url = URL.createObjectURL(s.blob);
+  libAudio.src = SONGLIB.url;
+  libAudio.currentTime = 0;
+  libAudio.play().catch(()=>{});
+  SONGLIB.active = true; SONGLIB.trail = []; SONGLIB.t0 = performance.now();
+  G.running = true;
+  $('results').style.display = 'none';
+  $('startOverlay').style.display = 'none';
+  $('stScore').textContent = '–'; $('stCombo').textContent = '–'; $('stAcc').textContent = '–';
+  if(!s.key) detectSongKey(s);
+  updateTransportUI();
+}
+function libRunFrame(){
+  const s = SONGLIB.song;
+  if(!s) { SONGLIB.active = false; return; }
+  const now = (performance.now() - SONGLIB.t0)/1000;
+  const um = MIC.on ? smoothedMidi() : null;
+  SONGLIB.trail.push({t:now, m:um});
+  while(SONGLIB.trail.length && now - SONGLIB.trail[0].t > 7) SONGLIB.trail.shift();
+  const dur = libAudio.duration || 0;
+  if(dur){
+    if(document.activeElement !== $('songSeek'))
+      $('songSeek').value = Math.round(libAudio.currentTime/dur*1000);
+    $('songTime').textContent = fmtT(libAudio.currentTime)+' / '+fmtT(dur);
+  }
+  $('stNote').textContent = um!==null ? midiName(um) : '–';
+  $('stTarget').textContent = s.key ? NOTE_NAMES[s.key.root]+(s.key.minor?' min':' maj') : '…';
+  drawPitchLane(cx2, cv, SONGLIB.trail, now, s.key);
+  $('lyricNow').style.fontSize = '15px';
+  $('lyricNow').innerHTML = '<span class="rest">'+
+    (s.key ? 'Key rails lit — keep your line on a bright lane'
+           : 'listening to work out the key…')+'</span>';
+  $('lyricNext').textContent = s.title+' — '+s.artist;
+  if(libAudio.ended) stopRun(false);
+}
+function libSeekFrac(frac){
+  const d = libAudio.duration || 0;
+  if(d) libAudio.currentTime = Math.max(0, Math.min(d-0.2, frac*d));
+  SONGLIB.trail.length = 0;
+}
+
 /* ---------- transport: play / pause / seek ---------- */
 function updateTransportUI(){
   const live = G.running;
-  $('btnPlay').textContent = !live ? 'Start' : (T.paused ? 'Resume' : 'Pause');
+  const paused = SONGLIB.active ? libAudio.paused : T.paused;
+  $('btnPlay').textContent = !live ? 'Start' : (paused ? 'Resume' : 'Pause');
   $('btnStop').disabled = !live;
   ['songSeek','btnBack10','btnFwd10','btnRestart'].forEach(id => $(id).disabled = !live);
 }
 function transportSeek(beat){
   if(!G.running) return;
+  if(SONGLIB.active) return;
   const s = currentSong();
   const b = seekSong(beat);
   if(G.packAudio && s.audioDataUrl){
@@ -1177,9 +1262,16 @@ function transportSeek(beat){
     if(n.t + n.d >= b){ G.stats[i].hit = 0; G.stats[i].done = false; }
   });
 }
-function nudge(sec){ transportSeek(songBeat() + sec*T.bps); }
+function nudge(sec){
+  if(SONGLIB.active){ libSeekFrac((libAudio.currentTime+sec)/(libAudio.duration||1)); return; }
+  transportSeek(songBeat() + sec*T.bps);
+}
 $('btnPlay').addEventListener('click', ()=>{
-  if(!G.running){ startRun(); updateTransportUI(); return; }
+  if(!G.running){ SONGLIB.song ? startLibRun() : startRun(); updateTransportUI(); return; }
+  if(SONGLIB.active){
+    if(libAudio.paused) libAudio.play().catch(()=>{}); else libAudio.pause();
+    updateTransportUI(); return;
+  }
   if(T.paused){
     resumeSong();
     if(G.packAudio && currentSong().audioDataUrl) G.packAudio.play().catch(()=>{});
@@ -1192,10 +1284,15 @@ $('btnPlay').addEventListener('click', ()=>{
 $('btnStop').addEventListener('click', ()=>{ stopRun(false); updateTransportUI(); });
 $('btnBack10').addEventListener('click', ()=>nudge(-10));
 $('btnFwd10').addEventListener('click', ()=>nudge(10));
-$('btnRestart').addEventListener('click', ()=>transportSeek(0));
+$('btnRestart').addEventListener('click', ()=>{
+  if(SONGLIB.active) return libSeekFrac(0);
+  transportSeek(0);
+});
 $('songSeek').addEventListener('input', ()=>{
   if(!G.running) return;
-  transportSeek((+$('songSeek').value/1000) * T.totalBeats);
+  const frac = +$('songSeek').value/1000;
+  if(SONGLIB.active) return libSeekFrac(frac);
+  transportSeek(frac * T.totalBeats);
 });
 $('btnAgain').addEventListener('click', ()=>{ $('results').style.display='none'; startRun(); updateTransportUI(); });
 
@@ -1413,6 +1510,7 @@ function gameFrame(){
   if(state.mode==='free'){ freeFrame(dt); return; }
   if(state.mode==='yt'){ ytFrame(dt); return; }
   if(state.mode==='lib'){ libFrame(dt); return; }
+  if(SONGLIB.active){ libRunFrame(); return; }
   if(state.mode==='train' && TRAIN.kind!=='ladder'){ trainFrame(dt); return; }
   if(!G.running){ return; }
 
@@ -1760,6 +1858,7 @@ function addPackToSongs(p){
 }
 function selectPack(song){
   const ix = SONGS.indexOf(song);
+  songIdx = ix; SONGLIB.song = null;
   $('songSel').value = ix;
   setTranspose(song.transposeDefault);
   if(song.audioDataUrl){
@@ -2192,6 +2291,7 @@ async function libInit(){
   LIB.songs.sort((a,b)=>(a.artist+a.title).localeCompare(b.artist+b.title));
   libRenderPlaylists(); libRender();
   await restorePacks();
+  fillSongSel();
 }
 
 /* imported song packs live in the same locker, so they survive a refresh */
@@ -2225,7 +2325,7 @@ $('libAdd').addEventListener('change', async e=>{
     LIB.songs.push(song);
     probeDuration(song);
   }
-  libRender();
+  libRender(); fillSongSel();
   if(files.length) libNotice('Added '+files.length+' song'+(files.length>1?'s':'')+'. Tap a song to play it, or use the mic button to sing it.');
 });
 function probeDuration(song){
@@ -2322,7 +2422,7 @@ function libRender(){
       LIB.songs=LIB.songs.filter(x=>x.id!==s.id);
       for(const p of LIB.playlists){ if(p.songIds.includes(s.id)){ p.songIds=p.songIds.filter(id=>id!==s.id); dbPut('playlists',p).catch(()=>{}); } }
       if(LIB.cur && LIB.cur.id===s.id){ libAudio.pause(); LIB.cur=null; $('playerBar').style.display='none'; }
-      libRenderPlaylists(); libRender();
+      libRenderPlaylists(); libRender(); fillSongSel();
     }));
     box.appendChild(row);
   });
