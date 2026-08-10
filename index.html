@@ -307,6 +307,21 @@
       </div>
     </div>
 
+    <div class="panel" id="libMapPanel" style="display:none;margin-top:10px">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <div class="grow">
+          <b id="libMapTitle">&nbsp;</b>
+          <div class="notice" style="margin:2px 0 0" id="libMapMsg">&nbsp;</div>
+        </div>
+        <select id="voiceSel" title="Singer's range" style="min-width:150px">
+          <option value="0">Voice: detect</option>
+          <option value="70">Voice: lower / male</option>
+          <option value="155">Voice: higher / female</option>
+        </select>
+        <button class="btn primary" id="btnBuildMap">Build note map</button>
+      </div>
+      <div class="micmeter" id="libMapBarWrap" style="display:none;margin-top:10px;height:10px"><i id="libMapBar"></i></div>
+    </div>
     <div id="sharedStage">
     <div class="hud">
       <div class="stat"><div class="v gold" id="stScore">0</div><div class="l">Score</div></div>
@@ -584,6 +599,9 @@
   <button id="navLib"><span class="ni"><svg class="ic" style="width:20px;height:20px"><use href="#i-book"/></svg></span>Library</button>
 </nav>
 <script>
+const ANALYZER_SRC = "/* Melody analyser \u2014 runs in a Web Worker so the UI never freezes.\n   Given stereo audio it isolates the centre (the voice), tracks its pitch,\n   and turns that into a note map. Written without template literals so the\n   whole thing can be embedded as a string in the single-file app. */\nvar SR = 22050, NFFT = 2048, HOP = 512;\nvar PT_FRAME = 2048, PT_HOP = 256, FMAX = 900, YIN_TH = 0.17;\n\nfunction fft(re, im){\n  var n = re.length, i, j, bit, len, ang, wr, wi, cwr, cwi, k, ar, ai, vr, vi, nwr, tr, ti;\n  for(i=1, j=0; i<n; i++){\n    bit = n >> 1;\n    for(; j & bit; bit >>= 1) j ^= bit;\n    j ^= bit;\n    if(i < j){ tr=re[i]; re[i]=re[j]; re[j]=tr; ti=im[i]; im[i]=im[j]; im[j]=ti; }\n  }\n  for(len=2; len<=n; len<<=1){\n    ang = -2*Math.PI/len; wr = Math.cos(ang); wi = Math.sin(ang);\n    for(i=0; i<n; i+=len){\n      cwr = 1; cwi = 0;\n      for(k=0; k<(len>>1); k++){\n        ar = re[i+k+(len>>1)]; ai = im[i+k+(len>>1)];\n        vr = ar*cwr - ai*cwi; vi = ar*cwi + ai*cwr;\n        re[i+k+(len>>1)] = re[i+k]-vr; im[i+k+(len>>1)] = im[i+k]-vi;\n        re[i+k] += vr; im[i+k] += vi;\n        nwr = cwr*wr - cwi*wi; cwi = cwr*wi + cwi*wr; cwr = nwr;\n      }\n    }\n  }\n}\nfunction ifft(re, im){\n  var n = re.length, i;\n  for(i=0;i<n;i++) im[i] = -im[i];\n  fft(re, im);\n  for(i=0;i<n;i++){ re[i] /= n; im[i] = -im[i]/n; }\n}\nfunction hann(N){\n  var w = new Float32Array(N), i;\n  for(i=0;i<N;i++) w[i] = 0.5*(1-Math.cos(2*Math.PI*i/(N-1)));\n  return w;\n}\n\n/* Centre extraction: keep time-frequency bins that are near-identical in both\n   channels. Vocals sit dead centre in nearly every mix; instruments spread. */\nfunction centreVocal(L, R, progress){\n  var n = L.length, win = hann(NFFT), half = NFFT/2;\n  var out = new Float32Array(n), norm = new Float32Array(n);\n  var lr = new Float32Array(NFFT), li = new Float32Array(NFFT);\n  var rr = new Float32Array(NFFT), ri = new Float32Array(NFFT);\n  var vr = new Float32Array(NFFT), vi = new Float32Array(NFFT);\n  var pos = 0, k, i, eps = 1e-10, nb = Math.floor((n-NFFT)/HOP) + 1, done = 0;\n  while(pos + NFFT <= n){\n    for(i=0;i<NFFT;i++){ lr[i]=L[pos+i]*win[i]; li[i]=0; rr[i]=R[pos+i]*win[i]; ri[i]=0; }\n    fft(lr, li); fft(rr, ri);\n    for(k=0;k<=half;k++){\n      var lm = Math.sqrt(lr[k]*lr[k]+li[k]*li[k]);\n      var rm = Math.sqrt(rr[k]*rr[k]+ri[k]*ri[k]);\n      var dot = lr[k]*rr[k] + li[k]*ri[k];\n      var sim = 2*Math.abs(dot)/(lm*lm + rm*rm + eps);\n      var bal = 1 - Math.abs(lm-rm)/(lm+rm+eps);\n      var m = sim*bal; m = m*m;\n      var f = k*SR/NFFT;\n      if(f < 90) m *= f/90;\n      if(f > 4000) m *= Math.max(0, 1-(f-4000)/4000);\n      var mr = 0.5*(lr[k]+rr[k])*m, mi = 0.5*(li[k]+ri[k])*m;\n      vr[k]=mr; vi[k]=mi;\n      if(k>0 && k<half){ vr[NFFT-k]=mr; vi[NFFT-k]=-mi; }\n    }\n    ifft(vr, vi);\n    for(i=0;i<NFFT;i++){ out[pos+i] += vr[i]*win[i]; norm[pos+i] += win[i]*win[i]; }\n    pos += HOP; done++;\n    if((done & 63) === 0 && progress) progress(done/nb);\n  }\n  for(i=0;i<n;i++) if(norm[i] > 1e-6) out[i] /= norm[i];\n  return out;\n}\n\n/* YIN pitch tracking (cumulative mean normalised difference). */\nfunction yinTrack(x, fmin, progress){\n  var N = PT_FRAME, nf = Math.floor((x.length-N)/PT_HOP) + 1;\n  var f0 = new Float32Array(nf), conf = new Float32Array(nf), rms = new Float32Array(nf);\n  var nfft = 4096;\n  var re = new Float32Array(nfft), im = new Float32Array(nfft);\n  var d = new Float32Array(N), dp = new Float32Array(N), cs = new Float32Array(N+1);\n  var tlo = Math.max(2, Math.floor(SR/FMAX)), thi = Math.min(N-2, Math.floor(SR/fmin));\n  var fi, i, tau;\n  for(fi=0; fi<nf; fi++){\n    var off = fi*PT_HOP, mean = 0;\n    for(i=0;i<N;i++) mean += x[off+i];\n    mean /= N;\n    var e = 0;\n    for(i=0;i<N;i++){ var v = x[off+i]-mean; re[i]=v; im[i]=0; e += v*v; cs[i+1]=e; }\n    for(i=N;i<nfft;i++){ re[i]=0; im[i]=0; }\n    rms[fi] = Math.sqrt(e/N);\n    fft(re, im);\n    for(i=0;i<nfft;i++){ var rr2=re[i]*re[i]+im[i]*im[i]; re[i]=rr2; im[i]=0; }\n    ifft(re, im);\n    for(tau=0; tau<N; tau++) d[tau] = cs[N-tau] + (cs[N]-cs[tau]) - 2*re[tau];\n    d[0] = 0;\n    var run = 0; dp[0] = 1;\n    for(tau=1; tau<N; tau++){\n      run += d[tau];\n      var den = run/tau;\n      dp[tau] = den > 1e-12 ? d[tau]/den : 1;\n    }\n    var best = -1;\n    for(tau=tlo; tau<thi; tau++){ if(dp[tau] < YIN_TH){ best = tau; break; } }\n    if(best < 0){\n      var mv = Infinity;\n      for(tau=tlo; tau<thi; tau++) if(dp[tau] < mv){ mv = dp[tau]; best = tau; }\n    }\n    if(best > tlo && best < thi-1){\n      while(best+1 < thi-1 && dp[best+1] < dp[best]) best++;\n      var a = dp[best-1], b = dp[best], c = dp[best+1], den2 = a-2*b+c;\n      var sh = Math.abs(den2) > 1e-12 ? 0.5*(a-c)/den2 : 0;\n      if(sh > 1) sh = 1; if(sh < -1) sh = -1;\n      f0[fi] = SR/(best+sh); conf[fi] = b;\n    } else { f0[fi] = 0; conf[fi] = 1; }\n    if((fi & 255) === 0 && progress) progress(fi/nf);\n  }\n  return {f0:f0, conf:conf, rms:rms};\n}\n\nfunction median(a){\n  if(!a.length) return 0;\n  var s = Array.prototype.slice.call(a).sort(function(p,q){return p-q;});\n  return s[Math.floor(s.length/2)];\n}\nfunction medfilt(a, k){\n  var out = new Float32Array(a.length), h = k>>1, i, j, buf = [];\n  for(i=0;i<a.length;i++){\n    buf.length = 0;\n    for(j=Math.max(0,i-h); j<=Math.min(a.length-1,i+h); j++) buf.push(a[j]);\n    out[i] = median(buf);\n  }\n  return out;\n}\n\nfunction segment(tr){\n  var f0 = tr.f0, conf = tr.conf, rms = tr.rms, n = f0.length, i;\n  var dt = PT_HOP/SR;\n  var pos = [];\n  for(i=0;i<n;i++) if(rms[i] > 0) pos.push(rms[i]);\n  var floor = median(pos), peak = 0;\n  for(i=0;i<n;i++) if(rms[i] > peak) peak = rms[i];\n  var midi = new Float32Array(n), voiced = new Uint8Array(n);\n  for(i=0;i<n;i++){\n    midi[i] = f0[i] > 0 ? 69 + 12*Math.log2(f0[i]/440) : NaN;\n    voiced[i] = (conf[i] < 0.22 && rms[i] > Math.max(floor*0.8, peak*0.025) && f0[i] > 0) ? 1 : 0;\n  }\n  var fillv = [];\n  for(i=0;i<n;i++) if(voiced[i]) fillv.push(midi[i]);\n  var med = median(fillv);\n  var filled = new Float32Array(n);\n  for(i=0;i<n;i++) filled[i] = voiced[i] ? midi[i] : med;\n  var ms = medfilt(filled, 7);\n\n  var notes = [], maxgap = Math.round(0.10/dt);\n  i = 0;\n  while(i < n){\n    if(!voiced[i]){ i++; continue; }\n    var j = i, pitches = [ms[i]], gap = 0;\n    while(j+1 < n){\n      if(!voiced[j+1]){ gap++; if(gap > maxgap) break; j++; continue; }\n      var ref = median(pitches.slice(-15));\n      if(Math.abs(ms[j+1]-ref) > 1.25) break;\n      gap = 0; pitches.push(ms[j+1]); j++;\n    }\n    var t0 = i*dt + PT_FRAME/2/SR, t1 = j*dt + PT_FRAME/2/SR;\n    if(t1-t0 >= 0.13 && pitches.length >= 6)\n      notes.push({t:t0, dur:t1-t0, pitch:median(pitches)});\n    i = j+1;\n  }\n  // octave slips: pull a note back toward what the melody is doing around it\n  for(var k2=0; k2<notes.length; k2++){\n    var near = [];\n    for(var q=0; q<notes.length; q++)\n      if(q !== k2 && Math.abs(notes[q].t - notes[k2].t) < 3) near.push(notes[q].pitch);\n    if(near.length < 3) continue;\n    var ctx = median(near), cur = Math.abs(notes[k2].pitch - ctx);\n    if(cur <= 7) continue;\n    var shifts = [12,-12,24,-24];\n    for(var z=0; z<4; z++)\n      if(Math.abs(notes[k2].pitch + shifts[z] - ctx) < cur-3){ notes[k2].pitch += shifts[z]; break; }\n  }\n  var out = [];\n  for(i=0;i<notes.length;i++){\n    var p = Math.round(notes[i].pitch);\n    if(p < 40 || p > 84) continue;\n    if(out.length && out[out.length-1].m === p && notes[i].t - (out[out.length-1].t + out[out.length-1].d) < 0.14)\n      out[out.length-1].d = notes[i].t + notes[i].dur - out[out.length-1].t;\n    else out.push({m:p, t:notes[i].t, d:notes[i].dur});\n  }\n  return out;\n}\n\nfunction roughness(notes){\n  if(notes.length < 8) return {med:99, big:1};\n  var iv = [], i;\n  for(i=0;i<notes.length-1;i++) iv.push(Math.abs(notes[i+1].m - notes[i].m));\n  var big = 0;\n  for(i=0;i<iv.length;i++) if(iv[i] >= 7) big++;\n  return {med: median(iv), big: big/iv.length};\n}\n\nfunction trimIntro(notes){\n  // an instrumental intro tracks as notes, but it leaps around like an accompaniment\n  var ph = [], cur = [0], i;\n  for(i=1;i<notes.length;i++){\n    if(notes[i].t - (notes[i-1].t + notes[i-1].d) > 1.2){ ph.push(cur); cur = []; }\n    cur.push(i);\n  }\n  ph.push(cur);\n  var start = 0;\n  for(var p=0;p<ph.length;p++){\n    if(ph[p].length < 3) continue;\n    var iv = [];\n    for(i=0;i<ph[p].length-1;i++) iv.push(Math.abs(notes[ph[p][i+1]].m - notes[ph[p][i]].m));\n    if(median(iv) < 5){ start = notes[ph[p][0]].t; break; }\n  }\n  return notes.filter(function(n){ return n.t >= start - 0.2; });\n}\n\nself.onmessage = function(ev){\n  var L = ev.data.L, R = ev.data.R;\n  var say = function(stage, frac){ self.postMessage({type:'progress', stage:stage, frac:frac}); };\n  try{\n    say('Isolating the voice', 0);\n    var voc = centreVocal(L, R, function(f){ say('Isolating the voice', f); });\n    // Try a full-range hunt and a female-voice floor, then keep whichever melody\n    // moves more smoothly. A low floor lets bass notes masquerade as the singer.\n    var results = [];\n    var forced = ev.data.floor || 0;\n    var floors = forced ? [forced, forced] : [70, 155];\n    for(var i=0;i<floors.length;i++){\n      if(forced && i === 1){ results.push(results[0]); break; }\n      say(forced ? 'Tracing the melody' : 'Tracing the melody (' + (i+1) + ' of 2)', 0);\n      var tr = yinTrack(voc, floors[i], function(f){\n        say(forced ? 'Tracing the melody' : 'Tracing the melody (' + (i+1) + ' of 2)', f); });\n      var notes = trimIntro(segment(tr));\n      var r = roughness(notes);\n      results.push({notes:notes, floor:floors[i], r:r, n:notes.length});\n    }\n    // Score a melody by how smoothly it moves: real singing steps, it does not\n    // leap an octave every other note. Keep the wide floor unless the narrow one\n    // is clearly better AND still holds most of the melody.\n    var score = function(r){ return r.med + 8*r.big; };\n    var pick = results[0];\n    var wide = results[0], narrow = results[1];\n    var keepsEnough = narrow.notes.length >= 12 &&\n                      narrow.notes.length >= 0.45*wide.notes.length;\n    if(keepsEnough && score(narrow.r) < score(wide.r) - 1.5) pick = narrow;\n    self.postMessage({type:'done', notes:pick.notes, floor:pick.floor, rough:pick.r,\n      tried:[{floor:floors[0], n:results[0].n, med:results[0].r.med, big:results[0].r.big},\n             {floor:floors[1], n:results[1].n, med:results[1].r.med, big:results[1].r.big}]});\n  }catch(err){\n    self.postMessage({type:'error', message:String(err && err.message || err)});\n  }\n};\n";
+
+/* ===== data.js ===== */
 'use strict';
 /* ================= SONG DATA =================
    Notes: {m: midi, t: startBeat, d: durationBeats, ly: lyric syllable, p: phrase index}
@@ -663,6 +681,8 @@ const SONGS = [
 }
 ];
 
+
+/* ===== engine.js ===== */
 /* ================= AUDIO ENGINE ================= */
 let ctx = null;
 let masterGain, backGain, guideGain, drumGain;
@@ -956,6 +976,8 @@ function smoothedMidi(){
   return s[Math.floor(s.length/2)];
 }
 
+
+/* ===== keydetect.js ===== */
 /* ---- key detection DSP (shared: used by app; unit-tested in node) ---- */
 function fftInPlace(re, im){
   const n = re.length;
@@ -1029,6 +1051,8 @@ function estimateKey(chroma){
   return best;
 }
 
+
+/* ===== ui.js ===== */
 /* ================= APP STATE & UI ================= */
 const $ = id => document.getElementById(id);
 const ICO = n => '<svg class="ic"><use href="#i-'+n+'"/></svg>';
@@ -1070,8 +1094,8 @@ function fillSongSel(){
 fillSongSel();
 function applyAudioLock(){
   // a real recording can't time-stretch, so tempo is pinned while it's loaded
-  const s = SONGLIB.song ? null : currentSong();
-  const locked = !!(s && s.audioDataUrl) || !!SONGLIB.song;
+  const s = currentSong();
+  const locked = !!(s && (s.audioDataUrl || s.blob)) || !!SONGLIB.song;
   $('rTempo').disabled = locked;
   $('rTempo').style.opacity = locked ? .4 : 1;
   if(locked){
@@ -1086,12 +1110,16 @@ $('songSel').addEventListener('change', ()=>{
   const v = String($('songSel').value);
   if(v.startsWith('lib:')){
     SONGLIB.song = LIB.songs.find(x=>x.id===v.slice(4)) || null;
+    SONGLIB.pack = (SONGLIB.song && SONGLIB.song.notes && SONGLIB.song.notes.length)
+      ? libPackFor(SONGLIB.song) : null;
+    if(SONGLIB.pack) setTranspose(0);
   } else {
-    SONGLIB.song = null;
+    SONGLIB.song = null; SONGLIB.pack = null;
     songIdx = +v;
     setTranspose(currentSong().transposeDefault||0);
   }
   applyAudioLock();
+  updateLibMapPanel();
 });
 
 /* ---------- controls ---------- */
@@ -1142,6 +1170,7 @@ $('micPillTop').addEventListener('click', ()=>{ if(!MIC.on) enableMic(); });
 /* ---------- transport ---------- */
 function currentSong(){
   if(state.mode==='train' && TRAIN.song) return TRAIN.song;
+  if(SONGLIB.pack) return SONGLIB.pack;
   return SONGS[songIdx] || SONGS[0];
 }
 
@@ -1160,9 +1189,11 @@ function startRun(){
   $('btnPlay').disabled=false; $('btnStop').disabled=false;
   startSong(s);
   updateTransportUI();
-  if(s.audioDataUrl){
+  if(s.audioDataUrl || s.blob){
     if(!G.packAudio) G.packAudio = new Audio();
-    G.packAudio.src = s.audioDataUrl;
+    if(G.packUrl){ URL.revokeObjectURL(G.packUrl); G.packUrl = null; }
+    if(s.blob){ G.packUrl = URL.createObjectURL(s.blob); G.packAudio.src = G.packUrl; }
+    else G.packAudio.src = s.audioDataUrl;
     const delay = Math.max(0,(T.startTime - ctx.currentTime))*1000;
     setTimeout(()=>{ if(G.running){ G.packAudio.currentTime = s.audioOffsetSec||0; G.packAudio.play(); } }, delay);
   }
@@ -1192,7 +1223,7 @@ function stopRun(showResults){
 /* ---------- singing a Library track inside Practice Songs ----------
    These have no note map, so instead of bubbles we show the live pitch lane
    with the song's key lit up. Same stage, same transport.                */
-const SONGLIB = { song:null, active:false, trail:[], t0:0, url:null };
+const SONGLIB = { song:null, pack:null, active:false, trail:[], t0:0, url:null };
 
 function startLibRun(){
   const s = SONGLIB.song;
@@ -1253,7 +1284,7 @@ function transportSeek(beat){
   if(SONGLIB.active) return;
   const s = currentSong();
   const b = seekSong(beat);
-  if(G.packAudio && s.audioDataUrl){
+  if(G.packAudio && (s.audioDataUrl || s.blob)){
     try{ G.packAudio.currentTime = (s.audioOffsetSec||0) + b/T.bps; }catch(e){}
   }
   G.trail.length = 0;
@@ -1267,14 +1298,18 @@ function nudge(sec){
   transportSeek(songBeat() + sec*T.bps);
 }
 $('btnPlay').addEventListener('click', ()=>{
-  if(!G.running){ SONGLIB.song ? startLibRun() : startRun(); updateTransportUI(); return; }
+  if(!G.running){
+    (SONGLIB.song && !SONGLIB.pack) ? startLibRun() : startRun();
+    updateTransportUI(); return;
+  }
   if(SONGLIB.active){
     if(libAudio.paused) libAudio.play().catch(()=>{}); else libAudio.pause();
     updateTransportUI(); return;
   }
   if(T.paused){
     resumeSong();
-    if(G.packAudio && currentSong().audioDataUrl) G.packAudio.play().catch(()=>{});
+    const cs = currentSong();
+    if(G.packAudio && (cs.audioDataUrl || cs.blob)) G.packAudio.play().catch(()=>{});
   } else {
     pauseSong();
     if(G.packAudio) G.packAudio.pause();
@@ -2224,6 +2259,120 @@ drawGame();
 G.lastT = performance.now();
 requestAnimationFrame(gameFrame);
 
+
+/* ===== analyze.js ===== */
+/* ================= BUILD A NOTE MAP FROM YOUR OWN SONG =================
+   Owning a song should mean you get its actual notes, not just its key. This
+   runs the melody analyser on a library track, right here on the device, and
+   stores the result so it plays with full bubbles like a processed pack.      */
+const ANALYZE = { busy:false, worker:null };
+
+function mapStatus(msg, frac){
+  $('libMapMsg').textContent = msg;
+  const wrap = $('libMapBarWrap');
+  if(frac == null){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  $('libMapBar').style.width = Math.round(Math.max(0, Math.min(1, frac))*100)+'%';
+}
+
+/* wrap a library track's notes so the normal bubble engine can play it */
+function libPackFor(song){
+  const BPM = 138, bps = BPM/60;
+  const offset = Math.max(0, song.notes[0].t - 8);
+  const notes = song.notes.map(n => ({
+    m:n.m, t:+((n.t-offset)*bps).toFixed(4), d:+(Math.max(n.d,0.12)*bps).toFixed(4), ly:'', p:0
+  }));
+  let p = 0;
+  notes.forEach((n,i)=>{
+    if(i && (n.t - (notes[i-1].t + notes[i-1].d))/bps > 0.8) p++;
+    n.p = p;
+  });
+  return { id:'libpack_'+song.id, title:song.title+' — '+song.artist, isPack:true,
+           bpm:BPM, beatsPerBar:4, transposeDefault:0, notes, chords:[],
+           noDrums:true, windowY:true, guideVoice:'piano',
+           blob:song.blob, audioDataUrl:null, audioOffsetSec:+offset.toFixed(3) };
+}
+
+function updateLibMapPanel(){
+  const song = SONGLIB.song;
+  const panel = $('libMapPanel');
+  if(!song){ panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  $('libMapTitle').textContent = song.title+' — '+song.artist;
+  const has = song.notes && song.notes.length;
+  $('btnBuildMap').textContent = has ? 'Rebuild note map' : 'Build note map';
+  $('btnBuildMap').disabled = ANALYZE.busy;
+  if(!ANALYZE.busy){
+    mapStatus(has
+      ? song.notes.length+' notes mapped — this song plays with full bubbles and scoring.'
+      : 'No note map yet, so this plays with key rails only. Build one to get bubbles — takes a minute or two, all on your device.',
+      null);
+  }
+}
+
+async function buildNoteMap(song){
+  if(ANALYZE.busy || !song) return;
+  ANALYZE.busy = true;
+  $('btnBuildMap').disabled = true;
+  try{
+    ensureCtx();
+    mapStatus('Reading the file…', 0.02);
+    const raw = await song.blob.arrayBuffer();
+    const decoded = await ctx.decodeAudioData(raw.slice(0));
+    mapStatus('Preparing audio…', 0.06);
+    // 22.05 kHz is plenty for a voice and makes the analysis about four times faster
+    const off = new OfflineAudioContext(2, Math.max(1, Math.ceil(decoded.duration*22050)), 22050);
+    const src = off.createBufferSource();
+    src.buffer = decoded; src.connect(off.destination); src.start();
+    const rs = await off.startRendering();
+    const L = Float32Array.from(rs.getChannelData(0));
+    const R = Float32Array.from(rs.numberOfChannels > 1 ? rs.getChannelData(1) : rs.getChannelData(0));
+
+    const url = URL.createObjectURL(new Blob([ANALYZER_SRC], {type:'text/javascript'}));
+    const w = new Worker(url);
+    ANALYZE.worker = w;
+    const result = await new Promise((resolve, reject)=>{
+      w.onmessage = e=>{
+        const d = e.data;
+        if(d.type === 'progress') mapStatus(d.stage+'…', 0.08 + 0.9*d.frac);
+        else if(d.type === 'done') resolve(d);
+        else if(d.type === 'error') reject(new Error(d.message));
+      };
+      w.onerror = () => reject(new Error('the analyser stopped unexpectedly'));
+      const floor = +($('voiceSel') ? $('voiceSel').value : 0) || 0;
+      w.postMessage({L, R, floor}, [L.buffer, R.buffer]);
+    });
+    w.terminate(); URL.revokeObjectURL(url); ANALYZE.worker = null;
+
+    if(!result.notes || result.notes.length < 12)
+      throw new Error('could not find a clear vocal line in this track');
+
+    if(result.tried) console.log('floor candidates:', JSON.stringify(result.tried));
+    song.notes = result.notes;
+    song.noteFloor = result.floor;
+    await dbPut('songs', song).catch(()=>{});
+    if(SONGLIB.song && SONGLIB.song.id === song.id){
+      SONGLIB.pack = libPackFor(song);
+      applyAudioLock();
+    }
+    ANALYZE.busy = false;
+    updateLibMapPanel();
+    const ms = song.notes.map(n=>n.m);
+    mapStatus('Done — '+song.notes.length+' notes, '+
+              midiName(Math.min.apply(null,ms))+' to '+midiName(Math.max.apply(null,ms))+
+              '. Press Start to sing it with bubbles.', null);
+    libRender();
+  }catch(err){
+    ANALYZE.busy = false;
+    if(ANALYZE.worker){ ANALYZE.worker.terminate(); ANALYZE.worker = null; }
+    mapStatus('Could not build a note map: '+err.message, null);
+    $('btnBuildMap').disabled = false;
+  }
+}
+$('btnBuildMap').addEventListener('click', ()=>buildNoteMap(SONGLIB.song));
+
+
+/* ===== lib.js ===== */
 /* ================= LIBRARY: personal locker + player ================= */
 const LIB = {
   db:null, mem:null, songs:[], playlists:[], listId:'all',
@@ -2598,6 +2747,8 @@ function libFrame(dt){
 
 const libReady = libInit();
 
+
+/* ===== home.js ===== */
 /* ================= HOME: guided daily journey + navigation ================= */
 const JOURNEY = { steps:{warm:false, train:false, sing:false} };
 function todayStr(){ return new Date().toISOString().slice(0,10); }
@@ -2682,6 +2833,7 @@ libReady.then(async ()=>{
   renderJourney();
 });
 renderJourney();
+
 </script>
 </body>
 </html>
