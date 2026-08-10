@@ -1166,15 +1166,22 @@ function renderLyrics(s, beat){
     return;
   }
   $('lyricNow').style.fontSize = '';
-  let html='';
+  // a syllable held across several notes stays lit for the whole run
+  const words = [];
   idxs.forEach(i=>{
     const n = s.notes[i];
-    const cls = beat >= n.t+n.d ? 'sung' : (beat>=n.t ? 'cur' : 'rest');
-    html += '<span class="'+cls+'">'+n.ly+'</span> ';
+    if(n.ly) words.push({ly:n.ly, t:n.t, end:n.t+n.d});
+    else if(words.length) words[words.length-1].end = n.t+n.d;
+  });
+  let html='';
+  words.forEach(w=>{
+    const cls = beat >= w.end ? 'sung' : (beat >= w.t ? 'cur' : 'rest');
+    html += '<span class="'+cls+'">'+esc(w.ly)+'</span> ';
   });
   $('lyricNow').innerHTML = html;
   const nxt = phrases[curP+1];
-  $('lyricNext').textContent = nxt ? nxt.map(i=>s.notes[i].ly).join(' ') : '';
+  $('lyricNext').textContent = nxt
+    ? nxt.map(i=>s.notes[i].ly).filter(Boolean).join(' ') : '';
 }
 
 /* ---------- canvas rendering ---------- */
@@ -1633,36 +1640,50 @@ function ytFrame(dt){
   drawPitchLane(ycx, ycv, YTM.trail, now, YTM.key);
 }
 
-/* ---------- song pack import ---------- */
+/* ---------- song packs ---------- */
+function addPackToSongs(p){
+  if(!p.title || !p.bpm || !Array.isArray(p.notes)) throw new Error('missing title/bpm/notes');
+  const song = {
+    id:'pack_'+(++packSeq), title:p.title, isPack:true, bpm:p.bpm,
+    beatsPerBar:p.beatsPerBar||4, transposeDefault:p.transposeDefault||0,
+    notes:p.notes.map(n=>({m:n.m,t:n.t,d:n.d,ly:n.ly||'',p:n.p||0})),
+    chords:p.chords||[], audioDataUrl:p.audioDataUrl||null, audioOffsetSec:p.audioOffsetSec||0,
+    // packs carrying a real recording must not get the synth band on top
+    noDrums: p.noDrums!==undefined ? !!p.noDrums : !!p.audioDataUrl,
+    windowY: p.windowY!==undefined ? !!p.windowY : !!p.audioDataUrl,
+    guideVoice: p.guideVoice || 'piano', pianoBacking: !!p.pianoBacking
+  };
+  // re-importing the same pack should replace it, not stack up duplicates
+  const ix = SONGS.findIndex(s => s.isPack && s.title === song.title);
+  if(ix >= 0) SONGS[ix] = song; else SONGS.push(song);
+  fillSongSel();
+  return song;
+}
+function selectPack(song){
+  const ix = SONGS.indexOf(song);
+  $('songSel').value = ix;
+  setTranspose(song.transposeDefault);
+  if(song.audioDataUrl){
+    // the guide tone is a distraction over a real recording — start it muted
+    $('rGuide').value = 0; $('oGuide').textContent = '0%';
+    if(guideGain) guideGain.gain.value = 0;
+  }
+  applyAudioLock();
+}
 $('packFile').addEventListener('change', e=>{
   const f = e.target.files[0];
   if(!f) return;
+  e.target.value = '';
   const rd = new FileReader();
-  rd.onload = () => {
+  rd.onload = async () => {
     try{
       const p = JSON.parse(rd.result);
-      if(!p.title || !p.bpm || !Array.isArray(p.notes)) throw new Error('missing title/bpm/notes');
-      const song = {
-        id:'pack_'+(++packSeq), title:p.title+' · pack', bpm:p.bpm,
-        beatsPerBar:p.beatsPerBar||4, transposeDefault:p.transposeDefault||0,
-        notes:p.notes.map(n=>({m:n.m,t:n.t,d:n.d,ly:n.ly||'',p:n.p||0})),
-        chords:p.chords||[], audioDataUrl:p.audioDataUrl||null, audioOffsetSec:p.audioOffsetSec||0,
-        // packs carrying a real recording must not get the synth band on top
-        noDrums: p.noDrums!==undefined ? !!p.noDrums : !!p.audioDataUrl,
-        windowY: p.windowY!==undefined ? !!p.windowY : !!p.audioDataUrl,
-        guideVoice: p.guideVoice || 'piano', pianoBacking: !!p.pianoBacking
-      };
-      SONGS.push(song);
-      fillSongSel();
-      $('songSel').value = SONGS.length-1;
-      setTranspose(song.transposeDefault);
-      if(song.audioDataUrl){
-        // the guide tone is a distraction over a real recording — start it muted
-        $('rGuide').value = 0; $('oGuide').textContent = '0%';
-        if(guideGain) guideGain.gain.value = 0;
-      }
-      applyAudioLock();
-      alert('Song pack loaded: '+p.title);
+      const song = addPackToSongs(p);
+      selectPack(song);
+      let msg = 'Added to your repertoire: '+p.title;
+      try{ await savePack(p); msg += '\n\nSaved on this device — it will be here next time.'; }
+      catch(err){ msg += '\n\n(Could not save it permanently, so you would need to re-import after a refresh.)'; }
+      alert(msg);
     }catch(err){ alert('Could not read that song pack: '+err.message); }
   };
   rd.readAsText(f);
@@ -2019,18 +2040,19 @@ function libOpenDb(){
   return new Promise(res=>{
     let settled=false;
     const fallback=msg=>{ if(settled) return; settled=true;
-      LIB.mem={songs:new Map(), playlists:new Map(), meta:new Map()};
+      LIB.mem={songs:new Map(), playlists:new Map(), meta:new Map(), packs:new Map()};
       libNotice(msg+' Your library will work but won’t be saved between visits here. It saves normally in Chrome/Safari once the app is on its web address.');
       res();
     };
     try{
       if(!window.indexedDB) return fallback('This viewer can’t store files.');
-      const rq = indexedDB.open('repertoire', 2);
+      const rq = indexedDB.open('repertoire', 3);
       rq.onupgradeneeded = e=>{
         const db=e.target.result;
         if(!db.objectStoreNames.contains('songs')) db.createObjectStore('songs',{keyPath:'id'});
         if(!db.objectStoreNames.contains('playlists')) db.createObjectStore('playlists',{keyPath:'id'});
         if(!db.objectStoreNames.contains('meta')) db.createObjectStore('meta',{keyPath:'id'});
+        if(!db.objectStoreNames.contains('packs')) db.createObjectStore('packs',{keyPath:'id'});
       };
       rq.onsuccess = e=>{ if(settled) return; settled=true; LIB.db=e.target.result; res(); };
       rq.onerror = ()=>fallback('Storage is blocked here.');
@@ -2070,6 +2092,19 @@ async function libInit(){
   LIB.playlists = await dbAll('playlists');
   LIB.songs.sort((a,b)=>(a.artist+a.title).localeCompare(b.artist+b.title));
   libRenderPlaylists(); libRender();
+  await restorePacks();
+}
+
+/* imported song packs live in the same locker, so they survive a refresh */
+function packKey(p){ return 'pk_'+String(p.title||'untitled').slice(0,80); }
+async function savePack(p){ return dbPut('packs', {id: packKey(p), pack: p}); }
+async function restorePacks(){
+  try{
+    const rows = await dbAll('packs');
+    let n = 0;
+    rows.forEach(r => { try{ addPackToSongs(r.pack); n++; }catch(e){} });
+    if(n) console.log('restored '+n+' song pack(s)');
+  }catch(e){}
 }
 
 /* ---- adding songs ---- */
