@@ -295,6 +295,17 @@
       <span class="pill" id="micPill"><span class="dot" id="micDot"></span><span id="micTxt">Mic off</span></span>
       <label class="pill" style="cursor:pointer"><svg class="ic"><use href="#i-package"/></svg> Import song pack<input type="file" id="packFile" accept=".json" style="display:none"></label>
     </div>
+    <div class="panel" style="margin-top:10px">
+      <input type="range" id="songSeek" min="0" max="1000" value="0" disabled style="width:100%">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-top:2px">
+        <span class="pill" id="songTime">0:00 / 0:00</span>
+        <div class="row" style="gap:6px">
+          <button class="btn" id="btnBack10" disabled>&laquo; 10s</button>
+          <button class="btn" id="btnFwd10" disabled>10s &raquo;</button>
+          <button class="btn" id="btnRestart" disabled>Restart</button>
+        </div>
+      </div>
+    </div>
 
     <div id="sharedStage">
     <div class="hud">
@@ -784,11 +795,41 @@ function playCount(when, hi){
 /* ---- transport / scheduler ---- */
 const T = {
   playing:false, song:null, startTime:0, bps:2, tempo:1,
-  schedIdx:{note:0, chord:0, beat:0}, timer:null, countInBeats:0, totalBeats:0
+  schedIdx:{note:0, chord:0, beat:0}, timer:null, countInBeats:0, totalBeats:0,
+  paused:false, pauseBeat:0
 };
 function songBeat(){ // current beat position (can be negative during count-in)
   if(!T.playing) return -999;
+  if(T.paused) return T.pauseBeat;
   return (ctx.currentTime - T.startTime) * T.bps;
+}
+/* ---- pause / resume / seek ---- */
+function resetSchedFrom(beat){
+  const s = T.song;
+  T.schedIdx.beat = Math.floor(beat);
+  let ci=0; while(ci < s.chords.length && s.chords[ci][0] < beat) ci++;
+  T.schedIdx.chord = ci;
+  let ni=0; while(ni < s.notes.length && s.notes[ni].t < beat) ni++;
+  T.schedIdx.note = ni;
+}
+function pauseSong(){
+  if(!T.playing || T.paused) return;
+  T.pauseBeat = (ctx.currentTime - T.startTime) * T.bps;
+  T.paused = true;
+}
+function resumeSong(){
+  if(!T.playing || !T.paused) return;
+  T.startTime = ctx.currentTime - T.pauseBeat/T.bps;
+  T.paused = false;
+  resetSchedFrom(T.pauseBeat);
+}
+function seekSong(beat){
+  if(!T.playing) return 0;
+  beat = Math.max(0, Math.min(T.totalBeats - 0.25, beat));
+  if(T.paused) T.pauseBeat = beat;
+  else T.startTime = ctx.currentTime - beat/T.bps;
+  resetSchedFrom(beat);
+  return beat;
 }
 function beatTime(b){ return T.startTime + b / T.bps; }
 
@@ -802,7 +843,7 @@ function startSong(song){
   T.schedIdx = {note:0, chord:0, beat:-T.countInBeats};
   const last = song.notes[song.notes.length-1];
   T.totalBeats = last.t + last.d + 2;
-  T.playing = true;
+  T.playing = true; T.paused = false; T.pauseBeat = 0;
   // count-in clicks
   for(let i=0;i<T.countInBeats;i++) playCount(beatTime(i-T.countInBeats), i===0);
   T.timer = setInterval(schedule, 25);
@@ -812,7 +853,7 @@ function stopSong(){
   if(T.timer){ clearInterval(T.timer); T.timer=null; }
 }
 function schedule(){
-  if(!T.playing) return;
+  if(!T.playing || T.paused) return;
   const ahead = (ctx.currentTime - T.startTime + 0.12) * T.bps; // schedule 120ms ahead in beats
   const s = T.song, tr = state.transpose;
   while(T.schedIdx.beat < ahead){
@@ -1086,12 +1127,13 @@ function startRun(){
   const s = currentSong();
   G.running=true; G.finished=false;
   G.score=0; G.combo=0; G.bestCombo=0; G.notesHit=0;
-  G.trail=[]; G.lastT=performance.now(); G.viewLo=null; G.viewHi=null;
+  G.trail=[]; G.lastT=performance.now(); G.viewLo=null; G.viewHi=null; G.viewC=null;
   G.stats = s.notes.map(()=>({hit:0,total:0,done:false}));
   $('results').style.display='none';
   $('startOverlay').style.display='none'; // never block the stage once they start
-  $('btnPlay').disabled=true; $('btnStop').disabled=false;
+  $('btnPlay').disabled=false; $('btnStop').disabled=false;
   startSong(s);
+  updateTransportUI();
   if(s.audioDataUrl){
     if(!G.packAudio) G.packAudio = new Audio();
     G.packAudio.src = s.audioDataUrl;
@@ -1103,17 +1145,59 @@ function stopRun(showResults){
   if(G.packAudio){ G.packAudio.pause(); }
   stopSong();
   G.running=false;
-  $('btnPlay').disabled=false; $('btnStop').disabled=true;
+  $('btnPlay').disabled=false;
   $('countdown').style.display='none';
+  ['songSeek','btnBack10','btnFwd10','btnRestart'].forEach(id => $(id).disabled = true);
+  $('btnStop').disabled = true;
+  $('btnPlay').textContent = 'Start';
+  $('songSeek').value = 0;
   if(showResults){
     presentResults();
     if(state.mode==='train') journeyMark('warm');
     if(state.mode==='song') journeyMark('sing');
   }
 }
-$('btnPlay').addEventListener('click', startRun);
-$('btnStop').addEventListener('click', ()=>stopRun(false));
-$('btnAgain').addEventListener('click', ()=>{ $('results').style.display='none'; startRun(); });
+/* ---------- transport: play / pause / seek ---------- */
+function updateTransportUI(){
+  const live = G.running;
+  $('btnPlay').textContent = !live ? 'Start' : (T.paused ? 'Resume' : 'Pause');
+  $('btnStop').disabled = !live;
+  ['songSeek','btnBack10','btnFwd10','btnRestart'].forEach(id => $(id).disabled = !live);
+}
+function transportSeek(beat){
+  if(!G.running) return;
+  const s = currentSong();
+  const b = seekSong(beat);
+  if(G.packAudio && s.audioDataUrl){
+    try{ G.packAudio.currentTime = (s.audioOffsetSec||0) + b/T.bps; }catch(e){}
+  }
+  G.trail.length = 0; G.viewC = null;
+  // anything from here on is fair game to sing again
+  if(G.stats) s.notes.forEach((n,i)=>{
+    if(n.t + n.d >= b){ G.stats[i].hit = 0; G.stats[i].done = false; }
+  });
+}
+function nudge(sec){ transportSeek(songBeat() + sec*T.bps); }
+$('btnPlay').addEventListener('click', ()=>{
+  if(!G.running){ startRun(); updateTransportUI(); return; }
+  if(T.paused){
+    resumeSong();
+    if(G.packAudio && currentSong().audioDataUrl) G.packAudio.play().catch(()=>{});
+  } else {
+    pauseSong();
+    if(G.packAudio) G.packAudio.pause();
+  }
+  updateTransportUI();
+});
+$('btnStop').addEventListener('click', ()=>{ stopRun(false); updateTransportUI(); });
+$('btnBack10').addEventListener('click', ()=>nudge(-10));
+$('btnFwd10').addEventListener('click', ()=>nudge(10));
+$('btnRestart').addEventListener('click', ()=>transportSeek(0));
+$('songSeek').addEventListener('input', ()=>{
+  if(!G.running) return;
+  transportSeek((+$('songSeek').value/1000) * T.totalBeats);
+});
+$('btnAgain').addEventListener('click', ()=>{ $('results').style.display='none'; startRun(); updateTransportUI(); });
 
 /* ---------- results ---------- */
 function presentResults(){
@@ -1209,14 +1293,24 @@ function drawGame(){
   const tr = state.transpose;
   const beat = G.running? songBeat() : 0;
   let lo=127, hi=0;
-  if(s.windowY){ // zoom to the notes coming up (used by wide-range exercises)
-    s.notes.forEach(n=>{ if(n.t+n.d > beat-2 && n.t < beat+14){ lo=Math.min(lo,n.m+tr); hi=Math.max(hi,n.m+tr); } });
-    if(hi<lo){ lo=57; hi=69; }
-    lo-=3; hi+=3;
-    if(G.viewLo==null){ G.viewLo=lo; G.viewHi=hi; }
-    G.viewLo += (lo-G.viewLo)*0.06;
-    G.viewHi += (hi-G.viewHi)*0.06;
-    lo=G.viewLo; hi=G.viewHi;
+  if(s.windowY){
+    // Fixed vertical scale — a semitone is always the same height, so a note
+    // never moves. Only the grid slides, and only when the melody drifts far
+    // enough to need it.
+    const SPAN = 17;
+    const near = [];
+    s.notes.forEach(n=>{ if(n.t+n.d > beat-1 && n.t < beat+12) near.push(n.m+tr); });
+    let target;
+    if(near.length){ near.sort((a,b)=>a-b); target = near[Math.floor(near.length/2)]; }
+    else target = (G.viewC!=null ? G.viewC : 60);
+    if(G.viewC==null) G.viewC = target;
+    // current note must always be on screen; otherwise drift slowly with a deadzone
+    const cur = s.notes.find(n => beat>=n.t && beat<n.t+n.d);
+    const urgent = cur && Math.abs((cur.m+tr) - G.viewC) > SPAN/2 - 2;
+    const diff = target - G.viewC;
+    if(urgent) G.viewC += ((cur.m+tr) - G.viewC)*0.10;
+    else if(Math.abs(diff) > 1.5) G.viewC += diff*0.015;
+    lo = G.viewC - SPAN/2; hi = G.viewC + SPAN/2;
   } else {
     s.notes.forEach(n=>{ lo=Math.min(lo,n.m+tr); hi=Math.max(hi,n.m+tr); });
     lo-=3; hi+=3;
@@ -1342,6 +1436,14 @@ function gameFrame(){
     stopRun(true);
     return;
   }
+
+  // keep the seek bar and clock in step with playback
+  if(T.totalBeats>0){
+    if(document.activeElement !== $('songSeek'))
+      $('songSeek').value = Math.round(Math.max(0,beat)/T.totalBeats*1000);
+    $('songTime').textContent = fmtT(Math.max(0,beat)/T.bps)+' / '+fmtT(T.totalBeats/T.bps);
+  }
+  if(T.paused){ drawGame(); renderLyrics(s, beat); return; }
 
   const userMidi = MIC.on? smoothedMidi() : null;
   const scoreBeat = beat - state.latencyMs/1000*T.bps;
