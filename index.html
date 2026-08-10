@@ -1127,7 +1127,7 @@ function startRun(){
   const s = currentSong();
   G.running=true; G.finished=false;
   G.score=0; G.combo=0; G.bestCombo=0; G.notesHit=0;
-  G.trail=[]; G.lastT=performance.now(); G.viewLo=null; G.viewHi=null; G.viewC=null;
+  G.trail=[]; G.lastT=performance.now(); G.winLo=null; G.winHi=null;
   G.stats = s.notes.map(()=>({hit:0,total:0,done:false}));
   $('results').style.display='none';
   $('startOverlay').style.display='none'; // never block the stage once they start
@@ -1171,7 +1171,7 @@ function transportSeek(beat){
   if(G.packAudio && s.audioDataUrl){
     try{ G.packAudio.currentTime = (s.audioOffsetSec||0) + b/T.bps; }catch(e){}
   }
-  G.trail.length = 0; G.viewC = null;
+  G.trail.length = 0;
   // anything from here on is fair game to sing again
   if(G.stats) s.notes.forEach((n,i)=>{
     if(n.t + n.d >= b){ G.stats[i].hit = 0; G.stats[i].done = false; }
@@ -1273,7 +1273,7 @@ const cv = $('gameCanvas'), cx2 = cv.getContext('2d');
 function sizeCanvas(){
   const dpr = window.devicePixelRatio||1;
   const w = cv.clientWidth||cv.parentElement.clientWidth;
-  const h = Math.min(380, Math.max(260, window.innerHeight*0.38));
+  const h = Math.min(430, Math.max(290, window.innerHeight*0.44));
   cv.style.height = h+'px';
   cv.width = w*dpr; cv.height = h*dpr;
   cx2.setTransform(dpr,0,0,dpr,0,0);
@@ -1294,23 +1294,17 @@ function drawGame(){
   const beat = G.running? songBeat() : 0;
   let lo=127, hi=0;
   if(s.windowY){
-    // Fixed vertical scale — a semitone is always the same height, so a note
-    // never moves. Only the grid slides, and only when the melody drifts far
-    // enough to need it.
-    const SPAN = 17;
-    const near = [];
-    s.notes.forEach(n=>{ if(n.t+n.d > beat-1 && n.t < beat+12) near.push(n.m+tr); });
-    let target;
-    if(near.length){ near.sort((a,b)=>a-b); target = near[Math.floor(near.length/2)]; }
-    else target = (G.viewC!=null ? G.viewC : 60);
-    if(G.viewC==null) G.viewC = target;
-    // current note must always be on screen; otherwise drift slowly with a deadzone
-    const cur = s.notes.find(n => beat>=n.t && beat<n.t+n.d);
-    const urgent = cur && Math.abs((cur.m+tr) - G.viewC) > SPAN/2 - 2;
-    const diff = target - G.viewC;
-    if(urgent) G.viewC += ((cur.m+tr) - G.viewC)*0.10;
-    else if(Math.abs(diff) > 1.5) G.viewC += diff*0.015;
-    lo = G.viewC - SPAN/2; hi = G.viewC + SPAN/2;
+    // One fixed window for the whole song. The grid never moves and a semitone
+    // is always the same height, so every note has one permanent home on screen.
+    // Sized off the 1st-99th percentile so a couple of outliers can't squash it.
+    if(G.winLo==null){
+      const arr = s.notes.map(n=>n.m).sort((a,b)=>a-b);
+      const q = f => arr[Math.min(arr.length-1, Math.max(0, Math.round(f*(arr.length-1))))];
+      let a = q(0.01), b = q(0.99);
+      if(b-a < 13){ const c=(a+b)/2; a=c-6.5; b=c+6.5; }   // never zoom in too far
+      G.winLo = a-1.5; G.winHi = b+1.5;
+    }
+    lo = G.winLo+tr; hi = G.winHi+tr;
   } else {
     s.notes.forEach(n=>{ lo=Math.min(lo,n.m+tr); hi=Math.max(hi,n.m+tr); });
     lo-=3; hi+=3;
@@ -1346,8 +1340,11 @@ function drawGame(){
     const w = Math.max(16, n.d*ppb - 3);  // keep quick ornament notes visible
     if(x+w<-40 || x>W+40) return;
     const m = n.m+tr;
-    const h = Math.max(16, Math.min(26, rowH*1.6));
-    const y = yOf(m) - h/2;
+    const h = Math.max(11, Math.min(26, rowH*1.5));
+    // a rare note beyond the fixed window sits on the edge rather than
+    // stretching the scale for everyone else
+    const my = Math.max(lo+0.4, Math.min(hi-0.4, m));
+    const y = yOf(my) - h/2;
     const st = G.stats? G.stats[i] : null;
     const ratio = st && n.d>0 ? st.hit/n.d : 0;
     const past = beat > n.t+n.d;
@@ -1371,7 +1368,7 @@ function drawGame(){
     if (cx2.roundRect) cx2.roundRect(x, y, w, h, h/2); else cx2.rect(x,y,w,h);
     cx2.stroke();
     cx2.shadowBlur=0; cx2.lineWidth=1;
-    if(w>30){
+    if(w>30 && h>=15){
       cx2.fillStyle = ratio>0.35? '#231a00':'#cdd4ff';
       cx2.font='bold 11px sans-serif';
       cx2.fillText(midiName(m), x+8, y+h/2+4);
