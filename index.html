@@ -670,6 +670,7 @@ function ensureCtx(){
 
 /* ---- instrument voices ---- */
 function playPad(rootMidi, quality, when, dur, transpose){
+  if(when < ctx.currentTime) when = ctx.currentTime;
   const third = quality==='min'?3:4;
   const tones = [rootMidi, rootMidi+third, rootMidi+7];
   if(quality==='dom') tones.push(rootMidi+10);
@@ -688,6 +689,7 @@ function playPad(rootMidi, quality, when, dur, transpose){
   });
 }
 function playBass(rootMidi, when, dur, transpose){
+  if(when < ctx.currentTime) when = ctx.currentTime;
   const o = ctx.createOscillator(); o.type='triangle';
   o.frequency.value = midiFreq(rootMidi-12+transpose);
   const g = ctx.createGain();
@@ -698,6 +700,7 @@ function playBass(rootMidi, when, dur, transpose){
   o.start(when); o.stop(when+dur+0.05);
 }
 function playKick(when){
+  if(when < ctx.currentTime) when = ctx.currentTime;
   const o = ctx.createOscillator(); o.type='sine';
   o.frequency.setValueAtTime(150, when);
   o.frequency.exponentialRampToValueAtTime(45, when+0.11);
@@ -717,6 +720,7 @@ function getNoise(){
   return noiseBuf;
 }
 function playHat(when, accent){
+  if(when < ctx.currentTime) when = ctx.currentTime;
   const s = ctx.createBufferSource(); s.buffer = getNoise();
   const hp = ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=7000;
   const g = ctx.createGain();
@@ -726,6 +730,7 @@ function playHat(when, accent){
   s.start(when); s.stop(when+0.08);
 }
 function playGuide(midi, when, dur, transpose){
+  if(when < ctx.currentTime) when = ctx.currentTime;
   const o = ctx.createOscillator(); o.type='triangle';
   o.frequency.value = midiFreq(midi+transpose);
   const g = ctx.createGain();
@@ -738,6 +743,7 @@ function playGuide(midi, when, dur, transpose){
 }
 function playPiano(midi, when, dur, dest, vol){
   dest = dest || guideGain; vol = vol==null? 0.5 : vol;
+  if(when < ctx.currentTime) when = ctx.currentTime;
   const hold = Math.max(0.4, dur);
   const g = ctx.createGain();
   g.gain.setValueAtTime(0.0001, when);
@@ -765,6 +771,7 @@ function playBuzz(){
   playPiano(46, t, 0.3, masterGain, 0.25);
 }
 function playCount(when, hi){
+  if(when < ctx.currentTime) when = ctx.currentTime;
   const o = ctx.createOscillator(); o.type='square';
   o.frequency.value = hi?1500:1000;
   const g = ctx.createGain();
@@ -1000,9 +1007,23 @@ function fillSongSel(){
   });
 }
 fillSongSel();
+function applyAudioLock(){
+  // a real recording can't time-stretch, so tempo is pinned while it's loaded
+  const s = SONGS[+$('songSel').value];
+  const locked = !!(s && s.audioDataUrl);
+  $('rTempo').disabled = locked;
+  $('rTempo').style.opacity = locked ? .4 : 1;
+  if(locked){
+    state.tempo = 1; $('rTempo').value = 100;
+    $('oTempo').textContent = '100% (locked to recording)';
+  } else if($('oTempo').textContent.indexOf('locked')>=0){
+    $('oTempo').textContent = $('rTempo').value+'%';
+  }
+}
 $('songSel').addEventListener('change', ()=>{
   const s = SONGS[+$('songSel').value];
   setTranspose(s.transposeDefault||0);
+  applyAudioLock();
   stopRun();
 });
 
@@ -1129,6 +1150,22 @@ function renderLyrics(s, beat){
   }
   if(curP===-1) curP = phrases.length-1;
   const idxs = phrases[curP];
+  const hasWords = idxs.some(i => (s.notes[i].ly||'').trim() !== '');
+  if(!hasWords){
+    // pack built from a recording: no words yet, so coach the notes instead
+    let ci = -1;
+    for(let k=0;k<s.notes.length;k++){ if(s.notes[k].t <= beat) ci = k; else break; }
+    const cur = s.notes[ci], live = cur && beat < cur.t+cur.d;
+    const upcoming = s.notes.slice(ci+1, ci+5)
+      .map(n=>midiName(n.m+state.transpose)).join('   ');
+    $('lyricNow').innerHTML = cur
+      ? '<span class="'+(live?'cur':'sung')+'">'+midiName(cur.m+state.transpose)+'</span>'
+      : '<span class="rest">get ready…</span>';
+    $('lyricNow').style.fontSize = '30px';
+    $('lyricNext').textContent = upcoming ? 'next:   '+upcoming : '';
+    return;
+  }
+  $('lyricNow').style.fontSize = '';
   let html='';
   idxs.forEach(i=>{
     const n = s.notes[i];
@@ -1179,8 +1216,11 @@ function drawGame(){
   }
   const rowH = H/(hi-lo);
   const yOf = m => H - (m-lo)*rowH;
-  const ppb = Math.max(40, W/9);
   const nowX = W*0.28;
+  // scroll speed follows real time, not beat count: aim for ~4.5s of lookahead
+  // so a slow ballad and a fast warmup drill both read comfortably.
+  const bpsNow = (s.bpm*state.tempo)/60;
+  const ppb = Math.max(34, Math.min(140, (W-nowX)/Math.max(0.5, 3.6*bpsNow)));
 
   // lane lines
   cx2.font = '10px sans-serif';
@@ -1202,7 +1242,7 @@ function drawGame(){
   // note bubbles
   s.notes.forEach((n,i)=>{
     const x = nowX + (n.t-beat)*ppb;
-    const w = Math.max(10, n.d*ppb - 4);
+    const w = Math.max(16, n.d*ppb - 3);  // keep quick ornament notes visible
     if(x+w<-40 || x>W+40) return;
     const m = n.m+tr;
     const h = Math.max(16, Math.min(26, rowH*1.6));
@@ -1606,12 +1646,22 @@ $('packFile').addEventListener('change', e=>{
         id:'pack_'+(++packSeq), title:p.title+' · pack', bpm:p.bpm,
         beatsPerBar:p.beatsPerBar||4, transposeDefault:p.transposeDefault||0,
         notes:p.notes.map(n=>({m:n.m,t:n.t,d:n.d,ly:n.ly||'',p:n.p||0})),
-        chords:p.chords||[], audioDataUrl:p.audioDataUrl||null, audioOffsetSec:p.audioOffsetSec||0
+        chords:p.chords||[], audioDataUrl:p.audioDataUrl||null, audioOffsetSec:p.audioOffsetSec||0,
+        // packs carrying a real recording must not get the synth band on top
+        noDrums: p.noDrums!==undefined ? !!p.noDrums : !!p.audioDataUrl,
+        windowY: p.windowY!==undefined ? !!p.windowY : !!p.audioDataUrl,
+        guideVoice: p.guideVoice || 'piano', pianoBacking: !!p.pianoBacking
       };
       SONGS.push(song);
       fillSongSel();
       $('songSel').value = SONGS.length-1;
       setTranspose(song.transposeDefault);
+      if(song.audioDataUrl){
+        // the guide tone is a distraction over a real recording — start it muted
+        $('rGuide').value = 0; $('oGuide').textContent = '0%';
+        if(guideGain) guideGain.gain.value = 0;
+      }
+      applyAudioLock();
       alert('Song pack loaded: '+p.title);
     }catch(err){ alert('Could not read that song pack: '+err.message); }
   };
