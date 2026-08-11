@@ -318,6 +318,8 @@
           <option value="70">Voice: lower / male</option>
           <option value="155">Voice: higher / female</option>
         </select>
+        <button class="btn" id="btnPreviewMap" style="display:none">Preview map</button>
+        <button class="btn" id="btnMapSrc" style="display:none">Use imported pack</button>
         <button class="btn primary" id="btnBuildMap">Build note map</button>
       </div>
       <div class="micmeter" id="libMapBarWrap" style="display:none;margin-top:10px;height:10px"><i id="libMapBar"></i></div>
@@ -1195,11 +1197,11 @@ function applyAudioLock(){
 }
 $('songSel').addEventListener('change', ()=>{
   stopRun();
+  mapPreviewStop();
   const v = String($('songSel').value);
   if(v.startsWith('lib:')){
     SONGLIB.song = LIB.songs.find(x=>x.id===v.slice(4)) || null;
-    SONGLIB.pack = (SONGLIB.song && SONGLIB.song.notes && SONGLIB.song.notes.length)
-      ? libPackFor(SONGLIB.song) : null;
+    SONGLIB.pack = libPackBest(SONGLIB.song);
     if(SONGLIB.pack) setTranspose(0);
   } else {
     SONGLIB.song = null; SONGLIB.pack = null;
@@ -1267,6 +1269,7 @@ function currentSong(){
 }
 
 function startRun(){
+  mapPreviewStop();
   ensureCtx();
   try{ if(typeof libAudio!=='undefined' && !libAudio.paused){ libAudio.pause(); $('pbPlay').innerHTML=ICO('play'); } }catch(e){}
   if(guideGain) guideGain.gain.value = +$('rGuide').value/100;
@@ -2376,7 +2379,7 @@ requestAnimationFrame(gameFrame);
    runs the melody analyser on a library track, right here on the device, and
    stores the result so it plays with full bubbles like a processed pack.      */
 const ANALYZE = { busy:false, worker:null };
-const APP_VERSION = 'v3 \u00b7 pitch model';
+const APP_VERSION = 'v4 \u00b7 packs + preview';
 try{ console.log('Repertoire build', APP_VERSION); }catch(e){}
 window.addEventListener('DOMContentLoaded', ()=>{ const bt=document.getElementById('buildTag'); if(bt) bt.textContent = APP_VERSION; });
 
@@ -2406,27 +2409,221 @@ function libPackFor(song){
            blob:song.blob, audioDataUrl:null, audioOffsetSec:+offset.toFixed(3) };
 }
 
+/* ---- an imported pack beats a library-built map: it carries your lyrics ----
+   If a song in your library matches a pack you imported, play the pack's notes
+   and words over your own audio file. A button switches back to the built map. */
+const TITLE_JUNK = {official:1, audio:1, video:1, hd:1, hq:1, lyrics:1, lyric:1,
+                    remaster:1, remastered:1, version:1, mp3:1, m4a:1, wav:1,
+                    feat:1, ft:1, the:1, a:1, unknown:1, artist:1, copy:1, final:1};
+function titleTokens(s){
+  return String(s||'').toLowerCase()
+    .replace(/[‐-―’']/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .filter(w => w && !TITLE_JUNK[w] && !/^\d+$/.test(w));
+}
+function packMatchesSong(pack, song){
+  const p = titleTokens(pack.title);
+  const s = titleTokens(song.title + ' ' + (song.artist || ''));
+  if(p.length < 2 || s.length < 2) return false;
+  const small = s.length <= p.length ? s : p;
+  const big = s.length <= p.length ? p : s;
+  const seen = {};
+  big.forEach(w => { seen[w] = 1; });
+  return small.every(w => seen[w]);
+}
+function findPackForSong(song){
+  if(!song || typeof SONGS === 'undefined') return null;
+  for(let i=0;i<SONGS.length;i++){
+    const p = SONGS[i];
+    if(p.isPack && p.notes && p.notes.length && packMatchesSong(p, song)) return p;
+  }
+  return null;
+}
+/* a pack made for a different (say, shorter) rip would sit wrong against this
+   file — only use it when its last note still lands inside the audio */
+function packFitsSong(pack, song){
+  if(!song.duration || !pack.notes.length) return true;
+  const bps = pack.bpm/60, last = pack.notes[pack.notes.length-1];
+  return (pack.audioOffsetSec||0) + (last.t + last.d)/bps <= song.duration + 5;
+}
+function packOverLibrary(pack, song){
+  return { id:'libpack_'+song.id+'_pack', title:pack.title, isPack:true, fromPack:true,
+           bpm:pack.bpm, beatsPerBar:pack.beatsPerBar||4,
+           transposeDefault:pack.transposeDefault||0,
+           notes:pack.notes.map(n=>({m:n.m, t:n.t, d:n.d, ly:n.ly||'', p:n.p||0})),
+           chords:pack.chords||[],
+           noDrums:true, windowY:true, guideVoice:pack.guideVoice||'piano',
+           blob:song.blob, audioDataUrl:null, audioOffsetSec:pack.audioOffsetSec||0 };
+}
+/* which note map should this library song play with? */
+function libPackBest(song){
+  if(!song) return null;
+  const pack = findPackForSong(song);
+  const packOk = !!(pack && packFitsSong(pack, song));
+  const built = !!(song.notes && song.notes.length);
+  const want = song.mapSource || (packOk ? 'pack' : 'built');
+  if(want === 'pack' && packOk) return packOverLibrary(pack, song);
+  if(built) return libPackFor(song);
+  if(packOk) return packOverLibrary(pack, song);
+  return null;
+}
+/* the notes in real seconds of the file, whichever map is in use */
+function mapNotesAbs(song){
+  const p = libPackBest(song);
+  if(!p) return [];
+  const bps = p.bpm/60, off = p.audioOffsetSec||0;
+  return p.notes.map(n => ({m:n.m, t:off + n.t/bps, d:Math.max(0.12, n.d/bps)}));
+}
+
+/* ---- Preview: hear the map against the song without singing it ---- */
+const MAPPREV = { audio:null, url:null, iv:null, on:false, chunk:0, notes:[], i:0, end:0, gen:0 };
+const PREVIEW_SPAN = 22;
+
+function mapPreviewStop(){
+  MAPPREV.gen++;   // anything already starting up must give up quietly
+  if(MAPPREV.iv){ clearInterval(MAPPREV.iv); MAPPREV.iv = null; }
+  if(MAPPREV.audio){ try{ MAPPREV.audio.pause(); }catch(e){} MAPPREV.audio = null; }
+  if(MAPPREV.url){ URL.revokeObjectURL(MAPPREV.url); MAPPREV.url = null; }
+  MAPPREV.on = false;
+  const b = $('btnPreviewMap');
+  if(b) b.textContent = 'Preview map';
+}
+/* a handful of start points spread across the sung part of the song */
+function previewStarts(notes){
+  if(!notes.length) return [];
+  const first = notes[0].t, last = notes[notes.length-1].t;
+  const n = Math.max(1, Math.min(4, Math.round((last-first)/(PREVIEW_SPAN*1.5))));
+  const out = [];
+  for(let k=0;k<n;k++){
+    const target = first + (last-first)*k/n;
+    let best = notes[0];
+    for(let i=0;i<notes.length;i++)
+      if(Math.abs(notes[i].t-target) < Math.abs(best.t-target)) best = notes[i];
+    const s = Math.max(0, best.t - 1.2);
+    if(!out.length || s - out[out.length-1] > PREVIEW_SPAN*0.6) out.push(s);
+  }
+  return out;
+}
+async function mapPreviewStart(song){
+  if(MAPPREV.on){ mapPreviewStop(); updateLibMapPanel(); return; }
+  if(!song) return;
+  const notes = mapNotesAbs(song);
+  if(!notes.length){ mapStatus('Build a note map first — then you can preview it.', null); return; }
+  const starts = previewStarts(notes);
+  if(!starts.length) return;
+  ensureCtx();
+  const idx = MAPPREV.chunk % starts.length;
+  MAPPREV.chunk = idx + 1;
+  const t0 = starts[idx];
+  const a = new Audio();
+  a.preload = 'metadata';
+  const gen = ++MAPPREV.gen;
+  const url = URL.createObjectURL(song.blob);
+  MAPPREV.url = url;
+  a.src = url;
+  a.volume = 0.8;
+  MAPPREV.audio = a;
+  MAPPREV.notes = notes.filter(n => n.t >= t0 - 0.05 && n.t <= t0 + PREVIEW_SPAN);
+  MAPPREV.i = 0;
+  MAPPREV.end = t0 + PREVIEW_SPAN;
+  MAPPREV.on = true;
+  $('btnPreviewMap').textContent = 'Stop preview';
+  /* pressing Stop while the file is still opening must win */
+  const abandoned = () => {
+    if(MAPPREV.gen === gen) return false;
+    try{ a.pause(); }catch(e){}
+    try{ URL.revokeObjectURL(url); }catch(e){}
+    return true;
+  };
+  try{
+    await new Promise((res, rej)=>{
+      a.onloadedmetadata = res;
+      a.onerror = ()=>rej(new Error('this file would not open'));
+      setTimeout(()=>rej(new Error('the file took too long to open')), 10000);
+    });
+    if(abandoned()) return;
+    a.currentTime = t0;
+    await a.play();
+    if(abandoned()) return;
+  }catch(err){
+    if(abandoned()) return;
+    mapPreviewStop();
+    mapStatus('Could not play the preview: '+err.message, null);
+    return;
+  }
+  mapStatus('Preview '+(idx+1)+' of '+starts.length+', from '+fmtT(t0)+
+            ' — the piano plays the notes the app thinks are there. They should land on her words. '+
+            'Press again for the next part of the song.', null);
+  MAPPREV.iv = setInterval(()=>{
+    if(!MAPPREV.on || !MAPPREV.audio) return;
+    const now = MAPPREV.audio.currentTime;
+    if(now >= MAPPREV.end || MAPPREV.audio.ended){ mapPreviewStop(); updateLibMapPanel(); return; }
+    while(MAPPREV.i < MAPPREV.notes.length && MAPPREV.notes[MAPPREV.i].t < now + 0.5){
+      const nt = MAPPREV.notes[MAPPREV.i++];
+      if(nt.t < now - 0.15) continue;
+      const when = Math.max(ctx.currentTime, ctx.currentTime + (nt.t - now));
+      playPiano(nt.m, when, Math.min(nt.d, 1.2), masterGain, 0.55);
+    }
+  }, 120);
+}
+
 function updateLibMapPanel(){
   const song = SONGLIB.song;
   const panel = $('libMapPanel');
-  if(!song){ panel.style.display = 'none'; return; }
+  if(!song){ panel.style.display = 'none'; mapPreviewStop(); return; }
   panel.style.display = 'block';
   $('libMapTitle').textContent = song.title+' — '+song.artist;
-  const has = song.notes && song.notes.length;
-  $('btnBuildMap').textContent = has ? 'Rebuild note map' : 'Build note map';
+  const built = !!(song.notes && song.notes.length);
+  const pack = findPackForSong(song);
+  const packOk = !!(pack && packFitsSong(pack, song));
+  const usingPack = !!(SONGLIB.pack && SONGLIB.pack.fromPack);
+  $('btnBuildMap').textContent = built ? 'Rebuild note map' : 'Build note map';
   $('btnBuildMap').disabled = ANALYZE.busy;
-  if(!ANALYZE.busy){
-    mapStatus(!has
-      ? 'No note map yet, so this plays with key rails only. Build one to get bubbles — takes a minute or two, all on your device.'
-      : (song.mapVer === 3
-        ? song.notes.length+' notes mapped — this song plays with full bubbles and scoring.'
-        : 'This note map was made by an older version of the analyser. Press Rebuild note map to redo it with the new pitch model.'),
-      null);
+  const prev = $('btnPreviewMap');
+  prev.style.display = (built || packOk) ? '' : 'none';
+  prev.disabled = ANALYZE.busy;
+  const srcBtn = $('btnMapSrc');
+  if(packOk && built){
+    srcBtn.style.display = '';
+    srcBtn.textContent = usingPack ? 'Use built map' : 'Use imported pack';
+  } else {
+    srcBtn.style.display = 'none';
+  }
+  if(!ANALYZE.busy && !MAPPREV.on){
+    let msg;
+    if(usingPack)
+      msg = 'Playing your imported pack — '+SONGLIB.pack.notes.length+' notes with your lyrics'+
+            (built ? '. Your built map is still here if you want it.' : '.');
+    else if(!built)
+      msg = packOk
+        ? 'You have an imported pack for this song — press Use imported pack to sing it with words.'
+        : 'No note map yet, so this plays with key rails only. Build one to get bubbles — takes a minute or two, all on your device.';
+    else if(song.mapVer === 3)
+      msg = song.notes.length+' notes mapped — this song plays with full bubbles and scoring. '+
+            'Press Preview map to hear whether the notes line up before you sing.';
+    else
+      msg = 'This note map was made by an older version of the analyser. Press Rebuild note map to redo it with the new pitch model.';
+    mapStatus(msg, null);
   }
 }
 
+$('btnPreviewMap').addEventListener('click', ()=>mapPreviewStart(SONGLIB.song));
+$('btnMapSrc').addEventListener('click', ()=>{
+  const song = SONGLIB.song;
+  if(!song) return;
+  mapPreviewStop();
+  song.mapSource = (SONGLIB.pack && SONGLIB.pack.fromPack) ? 'built' : 'pack';
+  dbPut('songs', song).catch(()=>{});
+  SONGLIB.pack = libPackBest(song);
+  if(SONGLIB.pack) setTranspose(SONGLIB.pack.transposeDefault||0);
+  applyAudioLock();
+  updateLibMapPanel();
+});
+
 async function buildNoteMap(song){
   if(ANALYZE.busy || !song) return;
+  mapPreviewStop();
   ANALYZE.busy = true;
   $('btnBuildMap').disabled = true;
   try{
@@ -2470,7 +2667,8 @@ async function buildNoteMap(song){
     song.mapVer = 3;
     await dbPut('songs', song).catch(()=>{});
     if(SONGLIB.song && SONGLIB.song.id === song.id){
-      SONGLIB.pack = libPackFor(song);
+      song.mapSource = 'built';   // you just asked for this map, so play it
+      SONGLIB.pack = libPackBest(song);
       applyAudioLock();
     }
     ANALYZE.busy = false;
