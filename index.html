@@ -267,7 +267,7 @@
       <div class="mcard hue2" id="mcSong"><div class="mi"><svg class="ic" style="width:22px;height:22px"><use href="#i-music"/></svg></div><div><h4>Practice a Song</h4><p>Note bubbles + scoring</p></div><div class="chev">›</div></div>
       <div class="mcard hue3" id="mcYT"><div class="mi"><svg class="ic" style="width:22px;height:22px"><use href="#i-tv"/></svg></div><div><h4>YouTube Karaoke</h4><p>Any song, live pitch line</p></div><div class="chev">›</div></div>
       <div class="mcard hue4" id="mcLib"><div class="mi"><svg class="ic" style="width:22px;height:22px"><use href="#i-book"/></svg></div><div><h4>My Music</h4><p>Your songs, playlists & player</p></div><div class="chev">›</div></div>
-      <div class="mcard hue5" id="mcFree"><div class="mi"><svg class="ic" style="width:22px;height:22px"><use href="#i-headphones"/></svg></div><div><h4>Free Sing</h4><p>Just you and the tuner</p></div><div class="chev">›</div></div>
+      <div class="mcard hue5" id="mcFree"><div class="mi"><svg class="ic" style="width:22px;height:22px"><use href="#i-headphones"/></svg></div><div><h4>Pitch Monitor</h4><p>Sing and see the note you are on</p></div><div class="chev">›</div></div>
     </div>
   </div>
 
@@ -281,7 +281,7 @@
       <div class="mcard hue2" id="shSong"><div class="mi"><svg class="ic" style="width:22px;height:22px"><use href="#i-music"/></svg></div><div><h4>Practice Songs</h4><p>Bubbles, scoring & grades — built-in songs or imported packs</p></div><div class="chev">›</div></div>
       <div class="mcard hue3" id="shYT"><div class="mi"><svg class="ic" style="width:22px;height:22px"><use href="#i-tv"/></svg></div><div><h4>YouTube Karaoke</h4><p>Search any song's karaoke version, auto key detect</p></div><div class="chev">›</div></div>
       <div class="mcard hue4" id="shLib"><div class="mi"><svg class="ic" style="width:22px;height:22px"><use href="#i-book"/></svg></div><div><h4>Sing My Music</h4><p>Karaoke over songs you own, with key rails</p></div><div class="chev">›</div></div>
-      <div class="mcard hue5" id="shFree"><div class="mi"><svg class="ic" style="width:22px;height:22px"><use href="#i-headphones"/></svg></div><div><h4>Free Sing</h4><p>No song — watch your pitch, warm your voice</p></div><div class="chev">›</div></div>
+      <div class="mcard hue5" id="shFree"><div class="mi"><svg class="ic" style="width:22px;height:22px"><use href="#i-headphones"/></svg></div><div><h4>Pitch Monitor</h4><p>Sing and see the note, sharp or flat, live</p></div><div class="chev">›</div></div>
     </div>
   </div>
 
@@ -319,10 +319,61 @@
           <option value="155">Voice: higher / female</option>
         </select>
         <button class="btn" id="btnPreviewMap" style="display:none">Preview map</button>
+        <button class="btn" id="btnEditMap" style="display:none">Edit map</button>
+        <label class="btn" style="cursor:pointer">Import MIDI<input type="file" id="midiFile" accept=".mid,.midi,audio/midi,audio/x-midi" style="display:none"></label>
         <button class="btn" id="btnMapSrc" style="display:none">Use imported pack</button>
         <button class="btn primary" id="btnBuildMap">Build note map</button>
       </div>
       <div class="micmeter" id="libMapBarWrap" style="display:none;margin-top:10px;height:10px"><i id="libMapBar"></i></div>
+    </div>
+
+    <div class="panel" id="editPanel" style="display:none;margin-top:10px">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <b>Edit note map</b>
+        <div class="row" style="gap:6px">
+          <button class="btn" id="edPlay">Play</button>
+          <button class="btn" id="edZoomOut">&minus;</button>
+          <button class="btn" id="edZoomIn">+</button>
+          <button class="btn" id="edClose">Close</button>
+        </div>
+      </div>
+      <canvas id="editCanvas" style="width:100%;display:block;margin-top:8px;border-radius:10px;touch-action:none"></canvas>
+      <input type="range" id="edScrub" min="0" max="1000" value="0" style="width:100%;margin-top:6px">
+      <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
+        <button class="btn" id="edAdd">&#65291; Note</button>
+        <button class="btn" id="edDel">Delete</button>
+        <button class="btn" id="edLeft">&#9664; earlier</button>
+        <button class="btn" id="edRight">later &#9654;</button>
+        <button class="btn" id="edUp">&#9650; higher</button>
+        <button class="btn" id="edDown">&#9660; lower</button>
+        <button class="btn" id="edShorter">shorter</button>
+        <button class="btn" id="edLonger">longer</button>
+      </div>
+      <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
+        <select id="midiTrackSel" style="display:none;min-width:160px"></select>
+        <button class="btn" id="edFromAudio">&#65291; from audio</button>
+        <button class="btn primary" id="edSingIn">Sing it in</button>
+        <button class="btn" id="edTakeEarlier">take earlier</button>
+        <button class="btn" id="edTakeLater">take later</button>
+      </div>
+      <div class="notice" style="margin-top:6px">The blue line is the pitch the app hears in the song.
+        Where she sings but no bar sits on that line, press &#65291; from audio. Or press
+        <b>Sing it in</b> and sing the melody yourself &mdash; one clean voice is far easier to read than a full mix.</div>
+      <div class="notice" id="edMsg" style="margin-top:6px">&nbsp;</div>
+      <details style="margin-top:8px">
+        <summary style="cursor:pointer;font-weight:600">Words</summary>
+        <div class="notice" style="margin:6px 0">Type or paste the lyrics, one line of the song per line. They stay on this device.</div>
+        <textarea id="edLyrics" rows="6" placeholder="It&#39;s okay in the day&#10;I&#39;m staying busy&#10;..." style="width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px"></textarea>
+        <div class="row" style="gap:6px;margin-top:6px">
+          <button class="btn" id="edAlign">Put words on the notes</button>
+          <button class="btn" id="edClearLy">Clear words</button>
+        </div>
+      </details>
+      <div class="row" style="gap:6px;margin-top:8px">
+        <button class="btn primary" id="edSave">Save changes</button>
+        <button class="btn" id="edUndo">Undo</button>
+        <button class="btn" id="edRevert">Revert all</button>
+      </div>
     </div>
     <div id="sharedStage">
     <div class="hud">
@@ -584,7 +635,7 @@
     <button class="pill backpill" id="bsFree">← Sing menu</button>
     <div class="panel">
       <h3><svg class="ic"><use href="#i-headphones"/></svg> Sing over your own track</h3>
-      <div class="notice" style="margin:0 0 10px">Load any audio file you own (MP3 / WAV / M4A). It plays while the app listens to your voice and shows your pitch live — great for practicing along with a real song. When you get a song file, send it to me in chat and I can strip the vocals and build note bubbles for it so it appears in Song Mode.</div>
+      <div class="notice" style="margin:0 0 10px">Load any audio file you own (MP3 / WAV / M4A). It plays while the app listens to your voice and shows your pitch live — great for practicing along with a real song, and for checking whether you are sharp or flat on a note you are holding.</div>
       <div class="row">
         <input type="file" id="mp3File" accept="audio/*">
         <button class="btn" id="btnFreeMic"><svg class="ic"><use href="#i-mic"/></svg> Mic on</button>
@@ -1430,7 +1481,8 @@ $('btnAgain').addEventListener('click', ()=>{ $('results').style.display='none';
 function presentResults(){
   const s = currentSong();
   let hitT=0, totT=0;
-  G.stats.forEach((st,i)=>{ hitT+=st.hit; totT+=s.notes[i].d; });
+  if(!G.stats || !s || !s.notes){ $('results').style.display='none'; return; }
+  G.stats.forEach((st,i)=>{ hitT+=st.hit; totT+=(s.notes[i]? s.notes[i].d : 0); });
   const acc = totT? Math.round(100*hitT/totT) : 0;
   const grade = acc>=95?'S':acc>=88?'A':acc>=78?'B':acc>=65?'C':acc>=50?'D':'…';
   $('resGrade').textContent = grade;
@@ -1554,8 +1606,11 @@ function drawGame(){
     s.notes.forEach(n=>{ lo=Math.min(lo,n.m+tr); hi=Math.max(hi,n.m+tr); });
     lo-=3; hi+=3;
   }
-  const rowH = H/(hi-lo);
-  const yOf = m => H - (m-lo)*rowH;
+  // Rock Band layout: the pitch ribbon on top, the words in a row underneath
+  const LYH = Math.min(40, Math.max(26, H*0.12));
+  const HN = H - LYH;
+  const rowH = HN/(hi-lo);
+  const yOf = m => HN - (m-lo)*rowH;
   const nowX = W*0.28;
   // scroll speed follows real time, not beat count: aim for ~4.5s of lookahead
   // so a slow ballad and a fast warmup drill both read comfortably.
@@ -1619,6 +1674,38 @@ function drawGame(){
       cx2.fillText(midiName(m), x+8, y+h/2+4);
     }
   });
+
+  // the words, under the note they are sung on, scrolling with them
+  cx2.save();
+  cx2.beginPath(); cx2.rect(0, HN, W, LYH); cx2.clip();
+  cx2.fillStyle = 'rgba(8,10,28,.55)'; cx2.fillRect(0, HN, W, LYH);
+  cx2.strokeStyle = 'rgba(255,255,255,.08)';
+  cx2.beginPath(); cx2.moveTo(0, HN+0.5); cx2.lineTo(W, HN+0.5); cx2.stroke();
+  cx2.font = 'bold 14px sans-serif';
+  cx2.textAlign = 'left';
+  const wordY = HN + LYH*0.68;
+  let lastRight = -1e9, anyWord = false;
+  s.notes.forEach(n => {
+    const ly = (n.ly||'').trim();
+    if(!ly) return;
+    anyWord = true;
+    let x = nowX + (n.t-beat)*ppb;
+    if(x < -90 || x > W+90) return;
+    if(x < lastRight + 5) x = lastRight + 5;      // never let syllables collide
+    const past = beat > n.t+n.d;
+    const live = beat >= n.t-0.15 && beat <= n.t+n.d;
+    cx2.fillStyle = live ? '#ffd166' : (past ? 'rgba(154,163,207,.4)' : '#e8ecff');
+    if(live){ cx2.shadowColor = '#ffd166'; cx2.shadowBlur = 10; }
+    cx2.fillText(ly, x, wordY);
+    cx2.shadowBlur = 0;
+    lastRight = x + cx2.measureText(ly).width;
+  });
+  if(!anyWord){
+    cx2.fillStyle = 'rgba(154,163,207,.5)';
+    cx2.font = '12px sans-serif';
+    cx2.fillText('no words yet — Library \u25b8 Edit map \u25b8 paste your lyrics', 10, wordY);
+  }
+  cx2.restore();
 
   // user pitch trail
   if(G.trail.length>1){
@@ -2379,7 +2466,7 @@ requestAnimationFrame(gameFrame);
    runs the melody analyser on a library track, right here on the device, and
    stores the result so it plays with full bubbles like a processed pack.      */
 const ANALYZE = { busy:false, worker:null };
-const APP_VERSION = 'v4 \u00b7 packs + preview';
+const APP_VERSION = 'v6 \u00b7 MIDI + editor';
 try{ console.log('Repertoire build', APP_VERSION); }catch(e){}
 window.addEventListener('DOMContentLoaded', ()=>{ const bt=document.getElementById('buildTag'); if(bt) bt.textContent = APP_VERSION; });
 
@@ -2396,13 +2483,17 @@ function libPackFor(song){
   const BPM = 138, bps = BPM/60;
   const offset = Math.max(0, song.notes[0].t - 8);
   const notes = song.notes.map(n => ({
-    m:n.m, t:+((n.t-offset)*bps).toFixed(4), d:+(Math.max(n.d,0.12)*bps).toFixed(4), ly:'', p:0
+    m:n.m, t:+((n.t-offset)*bps).toFixed(4), d:+(Math.max(n.d,0.12)*bps).toFixed(4),
+    ly:n.ly||'', p:(n.p==null? null : n.p)
   }));
-  let p = 0;
-  notes.forEach((n,i)=>{
-    if(i && (n.t - (notes[i-1].t + notes[i-1].d))/bps > 0.8) p++;
-    n.p = p;
-  });
+  // the aligner groups notes into lyric lines; only guess at lines when it has not
+  if(notes.some(n => n.p == null)){
+    let p = 0;
+    notes.forEach((n,i)=>{
+      if(i && (n.t - (notes[i-1].t + notes[i-1].d))/bps > 0.8) p++;
+      n.p = p;
+    });
+  }
   return { id:'libpack_'+song.id, title:song.title+' — '+song.artist, isPack:true,
            bpm:BPM, beatsPerBar:4, transposeDefault:0, notes, chords:[],
            noDrums:true, windowY:true, guideVoice:'piano',
@@ -2473,7 +2564,7 @@ function mapNotesAbs(song){
   const p = libPackBest(song);
   if(!p) return [];
   const bps = p.bpm/60, off = p.audioOffsetSec||0;
-  return p.notes.map(n => ({m:n.m, t:off + n.t/bps, d:Math.max(0.12, n.d/bps)}));
+  return p.notes.map(n => ({m:n.m, t:off + n.t/bps, d:Math.max(0.12, n.d/bps), ly:n.ly||'', p:n.p||0}));
 }
 
 /* ---- Preview: hear the map against the song without singing it ---- */
@@ -2583,6 +2674,11 @@ function updateLibMapPanel(){
   const prev = $('btnPreviewMap');
   prev.style.display = (built || packOk) ? '' : 'none';
   prev.disabled = ANALYZE.busy;
+  const edit = $('btnEditMap');
+  if(edit){
+    edit.style.display = (built || packOk) ? '' : 'none';
+    edit.disabled = ANALYZE.busy;
+  }
   const srcBtn = $('btnMapSrc');
   if(packOk && built){
     srcBtn.style.display = '';
@@ -2599,15 +2695,921 @@ function updateLibMapPanel(){
       msg = packOk
         ? 'You have an imported pack for this song — press Use imported pack to sing it with words.'
         : 'No note map yet, so this plays with key rails only. Build one to get bubbles — takes a minute or two, all on your device.';
+    else if(song.edited)
+      msg = song.notes.length+' notes — your edited map. Press Edit map to keep fixing it, '+
+            'or Preview map to check it.';
     else if(song.mapVer === 3)
-      msg = song.notes.length+' notes mapped — this song plays with full bubbles and scoring. '+
-            'Press Preview map to hear whether the notes line up before you sing.';
+      msg = song.notes.length+' notes mapped — a rough draft from the analyser. '+
+            'Preview map checks it; Edit map is where you fix what it got wrong.';
     else
       msg = 'This note map was made by an older version of the analyser. Press Rebuild note map to redo it with the new pitch model.';
     mapStatus(msg, null);
   }
 }
 
+/* ================= WORDS + NOTE MAP EDITOR =================
+   The analyser writes a rough draft. This is where you make it right:
+   move, stretch, add and delete notes, and drop your own words onto them.
+   Rock Band charts look perfect because a person made them — same idea. */
+
+/* ---- syllables: split a word the way a singer would ---- */
+const CONS_UNITS = ['ng','ch','sh','th','ph','ck','gh','qu','wh','ck'];
+const NEVER_INITIAL = {ng:1, ck:1, x:1};
+function consUnits(s){
+  const out = [];
+  for(let i=0;i<s.length;){
+    const two = s.slice(i, i+2);
+    if(CONS_UNITS.indexOf(two) >= 0){ out.push({t:two, i:i, len:2}); i += 2; }
+    else { out.push({t:s[i], i:i, len:1}); i += 1; }
+  }
+  return out;
+}
+function syllables(word){
+  let w = String(word||'').toLowerCase().replace(/[^a-z']/g, '');
+  if(!w) return [];
+  const raw = word;
+  // a silent trailing e is not a syllable of its own ("time", not "ti-me")
+  let dropE = false;
+  if(w.length > 3 && w.slice(-1) === 'e' && !/[aeiouy]/.test(w.slice(-2,-1))){ w = w.slice(0,-1); dropE = true; }
+  // y counts as a vowel except at the start of a word ("yes") or straight
+  // after another vowel, where it is really a consonant ("stay-ing")
+  const isV = i => {
+    const c = w[i];
+    if('aeiou'.indexOf(c) >= 0) return true;
+    if(c !== 'y') return false;
+    if(i === 0) return false;
+    return 'aeiou'.indexOf(w[i-1]) < 0;
+  };
+  const groups = [];
+  for(let i=0;i<w.length;i++){
+    if(isV(i)){
+      const st = i;
+      while(i+1 < w.length && isV(i+1)) i++;
+      groups.push([st, i]);
+    }
+  }
+  if(groups.length <= 1) return [raw];
+  const cuts = [];
+  for(let g=0; g<groups.length-1; g++){
+    const from = groups[g][1]+1, to = groups[g+1][0];   // the consonants between
+    const units = consUnits(w.slice(from, to));
+    let cut;
+    if(units.length === 0) cut = to;                              // vowel meets vowel
+    else if(units.length === 1)
+      cut = NEVER_INITIAL[units[0].t] ? from + units[0].len : from;  // ma|ny, but sing|ing
+    else cut = from + units[0].len;                               // im|por|tant
+    if(cut > 0 && cut < w.length) cuts.push(cut);
+  }
+  if(!cuts.length) return [raw];
+  const parts = [];
+  let prev = 0;
+  for(const c of cuts){ if(c > prev){ parts.push(w.slice(prev, c)); prev = c; } }
+  parts.push(w.slice(prev) + (dropE ? 'e' : ''));
+  return parts.filter(Boolean);
+}
+/* a line of lyrics -> syllables that remember where words start */
+function lineSyllables(line){
+  const out = [];
+  String(line||'').split(/\s+/).filter(Boolean).forEach(word => {
+    const parts = syllables(word);
+    parts.forEach((p, i) => out.push({t: p + (i < parts.length-1 ? '-' : ''), sw: i === 0}));
+  });
+  return out;
+}
+
+/* ---- phrases: where the singing stops for breath ---- */
+function notePhrases(notes, gap){
+  const ph = [];
+  let cur = [0];
+  for(let i=1;i<notes.length;i++){
+    if(notes[i].t - (notes[i-1].t + notes[i-1].d) > gap){ ph.push(cur); cur = []; }
+    cur.push(i);
+  }
+  ph.push(cur);
+  return ph;
+}
+/* pick the breath-gap that carves the melody into about the number of phrases
+   the lyric sheet wants: forcing one phrase per line makes them so coarse the
+   back half of a song ends up with no words at all */
+function bestPhrases(notes, nLines){
+  const target = Math.max(nLines + 2, Math.round(1.7*nLines));
+  let best = null;
+  for(let g = 0.15; g <= 3.0001; g += 0.05){
+    const ph = notePhrases(notes, g);
+    if(ph.length < nLines) continue;
+    const score = Math.abs(ph.length - target);
+    if(!best || score < best.score) best = {score, ph};
+  }
+  return best ? best.ph : notePhrases(notes, 0.15);
+}
+
+/* ---- put a lyric sheet onto a melody (dynamic programming) ---- */
+function alignLyrics(notes, text){
+  const lines = String(text||'').split('\n').map(s => s.trim()).filter(Boolean);
+  if(!lines.length || !notes.length) return {lines:0, placed:0};
+  const ph = bestPhrases(notes, lines.length);
+  const NL = lines.length, NP = ph.length;
+  const syl = lines.map(lineSyllables);
+  const INF = 1e18;
+  const cost = [], back = [];
+  for(let i=0;i<=NL;i++){
+    cost.push(new Float64Array(NP+1).fill(INF));
+    back.push(new Int32Array(NP+1).fill(-1));
+  }
+  cost[0][0] = 0;
+  for(let li=0; li<NL; li++){
+    const s = Math.max(1, syl[li].length);
+    for(let pi=0; pi<=NP; pi++){
+      if(cost[li][pi] === INF) continue;
+      let nn = 0;
+      for(let k=1; k<=4 && pi+k<=NP; k++){
+        nn += ph[pi+k-1].length;
+        if(NP - (pi+k) < NL - (li+1)) continue;   // leave a phrase for every line left
+        const c = Math.abs(s-nn) + 0.35*Math.max(0, nn-2*s) + 0.35*Math.max(0, s-2*nn) + (k>1 ? 1.5 : 0);
+        if(cost[li][pi] + c < cost[li+1][pi+k]){
+          cost[li+1][pi+k] = cost[li][pi] + c;
+          back[li+1][pi+k] = pi;
+        }
+      }
+    }
+  }
+  if(cost[NL][NP] === INF) return {lines:lines.length, placed:0};
+  // walk back to get each line's phrases
+  const spans = [];
+  let pi = NP;
+  for(let li=NL; li>0; li--){ const p0 = back[li][pi]; spans.unshift([p0, pi]); pi = p0; }
+  notes.forEach(n => { n.ly = ''; n.p = 0; });
+  let placed = 0;
+  spans.forEach((sp, li) => {
+    const idxs = [];
+    for(let q=sp[0]; q<sp[1]; q++) for(const i of ph[q]) idxs.push(i);
+    const S = syl[li], N = idxs.length;
+    idxs.forEach(i => { notes[i].p = li; });
+    if(!S.length || !N) return;
+    // one rule covers both directions: several syllables can share a note, and
+    // a held syllable simply leaves the notes after it blank
+    for(let s2=0; s2<S.length; s2++){
+      const k = Math.min(N-1, Math.floor(s2*N/S.length));
+      const n = notes[idxs[k]];
+      const piece = S[s2].t;
+      n.ly = n.ly ? (S[s2].sw ? n.ly + ' ' + piece : n.ly + piece) : piece;
+      placed++;
+    }
+  });
+  return {lines:lines.length, placed, phrases:NP};
+}
+
+/* ================= the editor ================= */
+const EDIT = { on:false, song:null, notes:[], sel:-1, viewT:0, span:8,
+               undo:[], audio:null, url:null, iv:null, playing:false, playT:0,
+               drag:null, dirty:false, lo:55, hi:75, schedI:0 };
+const ecv = $('editCanvas'), ecx = ecv.getContext('2d');
+
+function edSize(){
+  const dpr = window.devicePixelRatio||1;
+  const w = edW();
+  const h = 240;
+  ecv.style.height = h+'px';
+  ecv.width = w*dpr; ecv.height = h*dpr;
+  ecx.setTransform(dpr,0,0,dpr,0,0);
+}
+function edDur(){
+  const s = EDIT.song;
+  let d = s && s.duration ? s.duration : 0;
+  EDIT.notes.forEach(n => { d = Math.max(d, n.t + n.d + 2); });
+  return Math.max(10, d);
+}
+function edPush(){
+  EDIT.undo.push(JSON.stringify(EDIT.notes));
+  if(EDIT.undo.length > 40) EDIT.undo.shift();
+  EDIT.dirty = true;
+}
+function edRange(){
+  if(!EDIT.notes.length){ EDIT.lo = 55; EDIT.hi = 75; return; }
+  let lo = 127, hi = 0;
+  EDIT.notes.forEach(n => { lo = Math.min(lo, n.m); hi = Math.max(hi, n.m); });
+  if(hi - lo < 12){ const c = (lo+hi)/2; lo = c-6; hi = c+6; }
+  EDIT.lo = lo - 2; EDIT.hi = hi + 2;
+}
+function edW(){ return Math.max(120, ecv.clientWidth || (ecv.parentElement && ecv.parentElement.clientWidth) || 320); }
+function edX(t){ return (t - EDIT.viewT)/EDIT.span * edW(); }
+function edT(x){ return EDIT.viewT + x/edW()*EDIT.span; }
+function edY(m){
+  const H = 240 - 34;
+  return H - (m - EDIT.lo)/(EDIT.hi - EDIT.lo) * H;
+}
+function edM(y){
+  const H = 240 - 34;
+  return EDIT.lo + (H - y)/H * (EDIT.hi - EDIT.lo);
+}
+
+function edDraw(){
+  const W = edW(), H = 240, LY = 34, HN = H - LY;
+  ecx.clearRect(0,0,W,H);
+  ecx.fillStyle = '#0d1030'; ecx.fillRect(0,0,W,H);
+  // pitch lines
+  ecx.font = '10px sans-serif';
+  for(let m = Math.ceil(EDIT.lo); m <= EDIT.hi; m++){
+    const pc = ((m%12)+12)%12;
+    const isC = pc === 0, natural = [0,2,4,5,7,9,11].indexOf(pc) >= 0;
+    ecx.strokeStyle = isC ? 'rgba(255,209,102,.28)' : (natural ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.03)');
+    ecx.beginPath(); ecx.moveTo(0, edY(m)); ecx.lineTo(W, edY(m)); ecx.stroke();
+    if(natural && (EDIT.hi-EDIT.lo) < 26){
+      ecx.fillStyle = isC ? 'rgba(255,209,102,.65)' : 'rgba(154,163,207,.45)';
+      ecx.fillText(midiName(m), 3, edY(m)-2);
+    }
+  }
+  // second grid lines
+  ecx.strokeStyle = 'rgba(255,255,255,.05)';
+  for(let t = Math.ceil(EDIT.viewT); t < EDIT.viewT + EDIT.span; t++){
+    const x = edX(t);
+    ecx.beginPath(); ecx.moveTo(x, 0); ecx.lineTo(x, HN); ecx.stroke();
+  }
+  edDrawGhost();
+  // notes
+  ecx.save();
+  ecx.beginPath(); ecx.rect(0,0,W,HN); ecx.clip();
+  EDIT.notes.forEach((n, i) => {
+    const x = edX(n.t), w = Math.max(6, edX(n.t+n.d) - x);
+    if(x + w < -20 || x > W + 20) return;
+    const y = edY(n.m) - 7;
+    const sel = i === EDIT.sel;
+    ecx.beginPath();
+    if(ecx.roundRect) ecx.roundRect(x, y, w, 14, 7); else ecx.rect(x, y, w, 14);
+    ecx.fillStyle = sel ? 'rgba(255,209,102,.85)' : 'rgba(76,201,240,.75)';
+    ecx.fill();
+    if(sel){
+      ecx.strokeStyle = '#fff'; ecx.lineWidth = 2; ecx.stroke(); ecx.lineWidth = 1;
+      ecx.fillStyle = '#fff';
+      ecx.fillRect(x + w - 3, y - 3, 3, 20);      // the stretch handle
+    }
+  });
+  ecx.restore();
+  // words
+  ecx.save();
+  ecx.beginPath(); ecx.rect(0, HN, W, LY); ecx.clip();
+  ecx.fillStyle = 'rgba(0,0,0,.35)'; ecx.fillRect(0, HN, W, LY);
+  ecx.font = 'bold 13px sans-serif';
+  let lastR = -1e9;
+  EDIT.notes.forEach((n, i) => {
+    const ly = (n.ly||'').trim();
+    if(!ly) return;
+    let x = edX(n.t);
+    if(x < -60 || x > W + 60) return;
+    if(x < lastR + 4) x = lastR + 4;
+    ecx.fillStyle = i === EDIT.sel ? '#ffd166' : '#e8ecff';
+    ecx.fillText(ly, x, HN + 22);
+    lastR = x + ecx.measureText(ly).width;
+  });
+  ecx.restore();
+  // playhead
+  const px = edX(EDIT.playT);
+  if(px >= 0 && px <= W){
+    ecx.strokeStyle = '#7c6cff'; ecx.lineWidth = 2;
+    ecx.beginPath(); ecx.moveTo(px, 0); ecx.lineTo(px, H); ecx.stroke();
+    ecx.lineWidth = 1;
+  }
+}
+
+function edStatus(){
+  const n = EDIT.sel >= 0 ? EDIT.notes[EDIT.sel] : null;
+  const words = EDIT.notes.filter(x => (x.ly||'').trim()).length;
+  $('edMsg').textContent = n
+    ? 'Selected: '+midiName(n.m)+' at '+fmtT(n.t)+', '+n.d.toFixed(2)+'s long'+
+      ((n.ly||'').trim() ? ' — "'+n.ly+'"' : ' — no word')
+    : EDIT.notes.length+' notes, '+words+' with words. Tap a note to change it, or tap empty space to move the playhead.';
+}
+function edRefresh(){ edRange(); edDraw(); edStatus(); if(typeof edGhostUpdate === 'function') edGhostUpdate(); }
+
+function edOpen(song){
+  if(!song) return;
+  mapPreviewStop();
+  EDIT.song = song;
+  EDIT.notes = mapNotesAbs(song).map(n => ({m:n.m, t:n.t, d:n.d, ly:n.ly||'', p:n.p||0}));
+  EDIT.sel = -1; EDIT.undo = []; EDIT.dirty = false;
+  EDIT.viewT = EDIT.notes.length ? Math.max(0, EDIT.notes[0].t - 1) : 0;
+  EDIT.playT = EDIT.viewT;
+  EDIT.on = true;
+  $('editPanel').style.display = 'block';
+  $('edScrub').max = Math.round(edDur()*10);
+  $('edScrub').value = Math.round(EDIT.viewT*10);
+  // show the words that are already on the map, one line per lyric line
+  const byLine = {};
+  EDIT.notes.forEach(n => {
+    const w = (n.ly||'').trim();
+    if(!w) return;
+    const k = n.p|0;
+    byLine[k] = byLine[k] ? byLine[k] + ' ' + w : w;
+  });
+  const keys = Object.keys(byLine).map(Number).sort((a,b)=>a-b);
+  if(keys.length) $('edLyrics').value = keys.map(k => byLine[k].replace(/- /g, '')).join('\n');
+  edSize(); edRefresh();
+  EDIT.ghost = null;
+  if(song.blob){
+    edToPcm(song.blob).then(pcm => { EDIT.pcm = pcm; edGhostUpdate(); })
+                      .catch(()=>{ EDIT.pcm = null; });
+  }
+  $('editPanel').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function edClose(){
+  edStopPlay();
+  EDIT.on = false;
+  $('editPanel').style.display = 'none';
+}
+function edStopPlay(){
+  if(EDIT.iv){ clearInterval(EDIT.iv); EDIT.iv = null; }
+  if(EDIT.audio){ try{ EDIT.audio.pause(); }catch(e){} EDIT.audio = null; }
+  if(EDIT.url){ URL.revokeObjectURL(EDIT.url); EDIT.url = null; }
+  EDIT.playing = false;
+  $('edPlay').textContent = 'Play';
+}
+async function edPlay(){
+  if(EDIT.playing){ edStopPlay(); return; }
+  const song = EDIT.song;
+  if(!song || !song.blob) return;
+  ensureCtx();
+  const t0 = EDIT.playT;
+  const a = new Audio();
+  a.preload = 'metadata';
+  EDIT.url = URL.createObjectURL(song.blob);
+  a.src = EDIT.url; a.volume = 0.8;
+  EDIT.audio = a; EDIT.playing = true;
+  $('edPlay').textContent = 'Stop';
+  const gen = ++EDIT.gen2;
+  try{
+    await new Promise((res, rej)=>{ a.onloadedmetadata = res; a.onerror = ()=>rej(new Error('cannot open')); });
+    if(gen !== EDIT.gen2 || !EDIT.playing) return;
+    a.currentTime = t0;
+    await a.play();
+  }catch(e){ edStopPlay(); return; }
+  EDIT.schedI = 0;
+  const sorted = EDIT.notes.slice().sort((x,y)=>x.t-y.t);
+  EDIT.iv = setInterval(()=>{
+    if(!EDIT.playing || !EDIT.audio) return;
+    const now = EDIT.audio.currentTime;
+    EDIT.playT = now;
+    if(now > EDIT.viewT + EDIT.span*0.9) EDIT.viewT = now - EDIT.span*0.3;
+    while(EDIT.schedI < sorted.length && sorted[EDIT.schedI].t < now + 0.5){
+      const n = sorted[EDIT.schedI++];
+      if(n.t < now - 0.15) continue;
+      playPiano(n.m, ctx.currentTime + (n.t - now), Math.min(n.d, 1.2), masterGain, 0.5);
+    }
+    edDraw();
+  }, 100);
+}
+EDIT.gen2 = 0;
+
+/* ---- pointer editing ---- */
+function edHitAt(i, x, y, pad){
+  const n = EDIT.notes[i];
+  if(!n) return false;
+  return x >= edX(n.t)-pad && x <= edX(n.t+n.d)+pad && Math.abs(y-edY(n.m)) <= 11;
+}
+function edHit(x, y){
+  // the note you already picked wins: otherwise a neighbour steals the grab
+  // when you reach for the end of a note to stretch it
+  if(EDIT.sel >= 0 && edHitAt(EDIT.sel, x, y, 6)) return EDIT.sel;
+  for(let i = EDIT.notes.length-1; i >= 0; i--) if(edHitAt(i, x, y, 6)) return i;
+  return -1;
+}
+ecv.addEventListener('pointerdown', ev => {
+  if(!EDIT.on) return;
+  const r = ecv.getBoundingClientRect();
+  const x = ev.clientX - r.left, y = ev.clientY - r.top;
+  const i = edHit(x, y);
+  if(i < 0){
+    EDIT.sel = -1;
+    EDIT.playT = Math.max(0, edT(x));
+    edRefresh();
+    return;
+  }
+  EDIT.sel = i;
+  const n = EDIT.notes[i];
+  // only a note wide enough to have a body gets a stretch handle, or short
+  // notes would be impossible to drag around
+  const wpx = edX(n.t+n.d) - edX(n.t);
+  const grab = wpx >= 22 ? Math.min(10, wpx*0.3) : 0;
+  const nearEnd = grab > 0 && Math.abs(x - edX(n.t+n.d)) <= grab;
+  edPush();
+  EDIT.drag = {i, mode: nearEnd ? 'len' : 'move', x0:x, y0:y, t0:n.t, d0:n.d, m0:n.m};
+  try{ ecv.setPointerCapture(ev.pointerId); }catch(e){}
+  edRefresh();
+});
+ecv.addEventListener('pointermove', ev => {
+  if(!EDIT.on || !EDIT.drag) return;
+  const r = ecv.getBoundingClientRect();
+  const x = ev.clientX - r.left, y = ev.clientY - r.top;
+  const d = EDIT.drag, n = EDIT.notes[d.i];
+  const dt = (x - d.x0)/edW()*EDIT.span;
+  if(d.mode === 'len'){
+    n.d = Math.max(0.08, d.d0 + dt);
+  } else {
+    n.t = Math.max(0, d.t0 + dt);
+    n.m = Math.round(edM(y));
+    if(n.m < 30) n.m = 30;
+    if(n.m > 96) n.m = 96;
+  }
+  edDraw(); edStatus();
+});
+function edEndDrag(){ if(EDIT.drag){ EDIT.drag = null; edRefresh(); } }
+ecv.addEventListener('pointerup', edEndDrag);
+ecv.addEventListener('pointercancel', edEndDrag);
+
+/* ---- buttons ---- */
+function edNudge(dt, dm, dd){
+  if(EDIT.sel < 0) return;
+  edPush();
+  const n = EDIT.notes[EDIT.sel];
+  if(dt) n.t = Math.max(0, n.t + dt);
+  if(dm){
+    n.m = Math.max(30, Math.min(96, n.m + dm));
+    try{ ensureCtx(); playPiano(n.m, ctx.currentTime, 0.3, masterGain, 0.5); }catch(e){}
+  }
+  if(dd) n.d = Math.max(0.08, n.d + dd);
+  edRefresh();
+}
+$('edPlay').addEventListener('click', edPlay);
+$('edClose').addEventListener('click', edClose);
+$('edZoomIn').addEventListener('click', ()=>{ EDIT.span = Math.max(2, EDIT.span/1.6); edRefresh(); });
+$('edZoomOut').addEventListener('click', ()=>{ EDIT.span = Math.min(60, EDIT.span*1.6); edRefresh(); });
+$('edScrub').addEventListener('input', ()=>{
+  EDIT.viewT = +$('edScrub').value/10;
+  EDIT.playT = EDIT.viewT;
+  edRefresh();
+});
+$('edLeft').addEventListener('click', ()=>edNudge(-0.05, 0, 0));
+$('edRight').addEventListener('click', ()=>edNudge(0.05, 0, 0));
+$('edUp').addEventListener('click', ()=>edNudge(0, 1, 0));
+$('edDown').addEventListener('click', ()=>edNudge(0, -1, 0));
+$('edShorter').addEventListener('click', ()=>edNudge(0, 0, -0.1));
+$('edLonger').addEventListener('click', ()=>edNudge(0, 0, 0.1));
+$('edAdd').addEventListener('click', ()=>{
+  edPush();
+  const m = EDIT.sel >= 0 ? EDIT.notes[EDIT.sel].m : Math.round((EDIT.lo+EDIT.hi)/2);
+  EDIT.notes.push({m, t: EDIT.playT, d: 0.4, ly:'', p:0});
+  EDIT.notes.sort((a,b)=>a.t-b.t);
+  EDIT.sel = EDIT.notes.findIndex(n => n.t === EDIT.playT && n.m === m);
+  edRefresh();
+});
+$('edDel').addEventListener('click', ()=>{
+  if(EDIT.sel < 0) return;
+  edPush();
+  EDIT.notes.splice(EDIT.sel, 1);
+  EDIT.sel = -1;
+  edRefresh();
+});
+$('edUndo').addEventListener('click', ()=>{
+  if(!EDIT.undo.length) return;
+  EDIT.notes = JSON.parse(EDIT.undo.pop());
+  EDIT.sel = -1;
+  edRefresh();
+});
+$('edRevert').addEventListener('click', ()=>{
+  if(!EDIT.song) return;
+  edPush();
+  EDIT.notes = mapNotesAbs(EDIT.song).map(n => ({m:n.m, t:n.t, d:n.d, ly:n.ly||'', p:n.p||0}));
+  EDIT.sel = -1;
+  edRefresh();
+});
+$('edAlign').addEventListener('click', ()=>{
+  const text = $('edLyrics').value;
+  if(!text.trim()){ $('edMsg').textContent = 'Paste the words first — one line per line of the song.'; return; }
+  if(!EDIT.notes.length){ $('edMsg').textContent = 'There are no notes to put words on yet.'; return; }
+  edPush();
+  EDIT.notes.sort((a,b)=>a.t-b.t);
+  const r = alignLyrics(EDIT.notes, text);
+  edRefresh();
+  $('edMsg').textContent = r.placed
+    ? 'Put '+r.lines+' lines onto the notes. Play it back and drag anything that landed wrong.'
+    : 'Could not fit those words onto this melody — there may be more lines than sung phrases.';
+});
+$('edClearLy').addEventListener('click', ()=>{
+  edPush();
+  EDIT.notes.forEach(n => { n.ly = ''; });
+  edRefresh();
+});
+$('edSave').addEventListener('click', async ()=>{
+  const song = EDIT.song;
+  if(!song) return;
+  edStopPlay();
+  EDIT.notes.sort((a,b)=>a.t-b.t);
+  song.notes = EDIT.notes.map(n => ({m:n.m, t:+n.t.toFixed(3), d:+Math.max(0.08,n.d).toFixed(3),
+                                     ly:n.ly||'', p:n.p|0}));
+  song.mapSource = 'built';
+  song.mapVer = 3;
+  song.edited = true;
+  try{ await dbPut('songs', song); }catch(e){}
+  SONGLIB.pack = libPackBest(song);
+  applyAudioLock();
+  EDIT.dirty = false;
+  updateLibMapPanel();
+  $('edMsg').textContent = 'Saved. Press Start to sing it — your changes are kept on this device.';
+});
+window.addEventListener('resize', ()=>{ if(EDIT.on){ edSize(); edDraw(); } });
+
+/* ================= what the app actually hears =================
+   The hard part of fixing a map by hand is knowing WHICH note is missing.
+   So the editor draws the pitch it hears in the song behind the bars, and
+   can drop a note straight onto it. No note-reading required. */
+EDIT.pcm = null; EDIT.worker = null; EDIT.ghost = null; EDIT.ghostBusy = false;
+EDIT.rec = null; EDIT.take = null; EDIT.busy = false;
+
+function edWorkerGet(){
+  if(EDIT.worker) return EDIT.worker;
+  const url = URL.createObjectURL(new Blob([ANALYZER_SRC], {type:'text/javascript'}));
+  const w = new Worker(url);
+  const data = crepeWeights();
+  w.postMessage({type:'liveInit', specs:CREPE_SPECS, data}, [data.buffer]);
+  EDIT.worker = w;
+  return w;
+}
+EDIT.workerQ = [];
+function edCrepeBatch(frames){
+  return new Promise((res) => {
+    const w = edWorkerGet();
+    if(!w.__edWired){
+      w.__edWired = true;
+      w.addEventListener('message', e => {
+        if(e.data && e.data.type === 'liveReady') return;   // the model finished loading
+        const next = EDIT.workerQ.shift();
+        if(next) next(e.data);
+      });
+    }
+    EDIT.workerQ.push(res);
+    w.postMessage({type:'crepeBatch', frames}, [frames.buffer]);
+  });
+}
+/* cut model-sized frames (1024 samples at 16 kHz) out of 22.05 kHz audio */
+function edFrames(pcm, t0, t1, hop){
+  const n = Math.max(0, Math.floor((t1-t0)/hop));
+  const frames = new Float32Array(n*1024), mult = 22050/16000;
+  for(let i=0;i<n;i++){
+    const start16 = (t0 + i*hop)*16000 - 512;
+    for(let k=0;k<1024;k++){
+      const sp = (start16+k)*mult, lo = Math.floor(sp), fr = sp-lo;
+      const a = (lo >= 0 && lo < pcm.length) ? pcm[lo] : 0;
+      const b = (lo+1 >= 0 && lo+1 < pcm.length) ? pcm[lo+1] : 0;
+      frames[i*1024+k] = a + (b-a)*fr;
+    }
+  }
+  return {frames, n};
+}
+async function edToPcm(blob){
+  const raw = await blob.arrayBuffer();
+  ensureCtx();
+  const dec = await ctx.decodeAudioData(raw.slice(0));
+  const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(dec.duration*22050)), 22050);
+  const s = off.createBufferSource();
+  s.buffer = dec; s.connect(off.destination); s.start();
+  const rs = await off.startRendering();
+  return Float32Array.from(rs.getChannelData(0));
+}
+EDIT.ghostGen = 0;
+async function edGhostUpdate(){
+  if(!EDIT.pcm || !EDIT.on) return;
+  const t0 = Math.max(0, EDIT.viewT - 0.2), t1 = EDIT.viewT + EDIT.span + 0.2;
+  if(EDIT.ghost && EDIT.ghost.done &&
+     Math.abs(EDIT.ghost.t0 - t0) < 0.01 && Math.abs(EDIT.ghost.t1 - t1) < 0.01) return;
+  const gen = ++EDIT.ghostGen;
+  const hop = 0.05;
+  const n = Math.max(0, Math.floor((t1 - t0)/hop));
+  if(!n) return;
+  const midi = new Float32Array(n), conf = new Float32Array(n);
+  EDIT.ghost = {t0, t1, hop, midi, conf, filled:0, done:false};
+  const CH = 40;                     // paint every couple of seconds of audio
+  for(let s0 = 0; s0 < n; s0 += CH){
+    if(gen !== EDIT.ghostGen || !EDIT.on) return;
+    const s1 = Math.min(n, s0 + CH);
+    const f = edFrames(EDIT.pcm, t0 + s0*hop, t0 + s1*hop, hop);
+    if(!f.n) break;
+    let r;
+    try{ r = await edCrepeBatch(f.frames); }catch(e){ return; }
+    if(gen !== EDIT.ghostGen || !EDIT.on) return;
+    midi.set(r.midi.subarray(0, s1 - s0), s0);
+    conf.set(r.conf.subarray(0, s1 - s0), s0);
+    EDIT.ghost.filled = s1;
+    edDraw();
+  }
+  if(gen === EDIT.ghostGen) EDIT.ghost.done = true;
+}
+function edDrawGhost(){
+  const g = EDIT.ghost;
+  if(!g || !g.midi) return;
+  ecx.save();
+  ecx.beginPath(); ecx.rect(0, 0, edW(), 240-34); ecx.clip();
+  ecx.strokeStyle = 'rgba(76,201,240,.55)';
+  ecx.lineWidth = 2;
+  ecx.beginPath();
+  let drawing = false;
+  const lim = g.filled != null ? g.filled : g.midi.length;
+  for(let i=0;i<lim;i++){
+    if(g.conf[i] < 0.35){ drawing = false; continue; }
+    const x = edX(g.t0 + i*g.hop), y = edY(g.midi[i]);
+    if(!drawing){ ecx.moveTo(x, y); drawing = true; } else ecx.lineTo(x, y);
+  }
+  ecx.stroke();
+  ecx.lineWidth = 1;
+  ecx.restore();
+}
+/* a note that follows the line the app heard, right where the playhead is */
+function edAddFromAudio(){
+  const g = EDIT.ghost;
+  if(!g || !g.midi){ $('edMsg').textContent = 'Still listening to this part — try again in a second.'; return; }
+  let i = Math.round((EDIT.playT - g.t0)/g.hop);
+  if(i < 0 || i >= g.midi.length || g.conf[i] < 0.35){
+    // look a little either side before giving up
+    let found = -1;
+    for(let k=1;k<=6;k++){
+      if(i-k >= 0 && g.conf[i-k] >= 0.35){ found = i-k; break; }
+      if(i+k < g.midi.length && g.conf[i+k] >= 0.35){ found = i+k; break; }
+    }
+    if(found < 0){ $('edMsg').textContent = 'No clear pitch here — the app cannot hear a voice at this spot.'; return; }
+    i = found;
+  }
+  let a = i, b = i;
+  while(a-1 >= 0 && g.conf[a-1] >= 0.35 && Math.abs(g.midi[a-1]-g.midi[i]) <= 1.2) a--;
+  while(b+1 < g.midi.length && g.conf[b+1] >= 0.35 && Math.abs(g.midi[b+1]-g.midi[i]) <= 1.2) b++;
+  const buf = [];
+  for(let k=a;k<=b;k++) buf.push(g.midi[k]);
+  buf.sort((x,y)=>x-y);
+  edPush();
+  const n = {m: Math.round(buf[buf.length>>1]), t: g.t0 + a*g.hop,
+             d: Math.max(0.12, (b-a+1)*g.hop), ly:'', p:0};
+  EDIT.notes.push(n);
+  EDIT.notes.sort((x,y)=>x.t-y.t);
+  EDIT.sel = EDIT.notes.indexOf(n);
+  edRefresh();
+  $('edMsg').textContent = 'Added '+midiName(n.m)+' — the note the app hears there.';
+}
+
+/* ---- sing the melody in: a solo voice is easy to read, a mix is not ---- */
+function edNotesFromTrace(midi, conf, hop, t0){
+  const notes = [];
+  let i = 0;
+  while(i < midi.length){
+    if(conf[i] < 0.35){ i++; continue; }
+    let j = i, seed = false;
+    while(j+1 < midi.length && conf[j+1] >= 0.35 && Math.abs(midi[j+1]-midi[j]) <= 1.2) j++;
+    for(let k=i;k<=j;k++) if(conf[k] >= 0.5){ seed = true; break; }
+    const dur = (j-i+1)*hop;
+    if(seed && dur >= 0.12){
+      const buf = [];
+      for(let k=i;k<=j;k++) buf.push(midi[k]);
+      buf.sort((x,y)=>x-y);
+      notes.push({m: Math.round(buf[buf.length>>1]), t: t0 + i*hop, d: dur, ly:'', p:0});
+    }
+    i = j+1;
+  }
+  return notes;
+}
+async function edSingIn(){
+  if(EDIT.rec){ try{ EDIT.rec.stop(); }catch(e){} return; }
+  if(EDIT.busy) return;
+  const song = EDIT.song;
+  if(!song) return;
+  try{
+    if(!MIC.on) await startMic();
+    let opts;
+    try{
+      if(MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) opts = {mimeType:'audio/webm;codecs=opus'};
+      else if(MediaRecorder.isTypeSupported('audio/mp4')) opts = {mimeType:'audio/mp4'};
+    }catch(e){}
+    const chunks = [];
+    const rec = new MediaRecorder(MIC.stream, opts);
+    EDIT.rec = rec;
+    rec.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = async () => {
+      EDIT.rec = null;
+      $('edSingIn').textContent = 'Sing it in';
+      edStopPlay();
+      if(!chunks.length){ $('edMsg').textContent = 'Nothing was recorded.'; return; }
+      EDIT.busy = true;
+      $('edMsg').textContent = 'Listening to your take…';
+      try{
+        const pcm = await edToPcm(new Blob(chunks, {type: rec.mimeType || 'audio/webm'}));
+        const hop = 0.05, dur = pcm.length/22050;
+        const midi = new Float32Array(Math.floor(dur/hop)), conf = new Float32Array(midi.length);
+        const CH = 160;   // a few seconds of frames per round trip
+        for(let s0=0; s0<midi.length; s0+=CH){
+          const s1 = Math.min(midi.length, s0+CH);
+          const f = edFrames(pcm, s0*hop, s1*hop, hop);
+          if(!f.n) break;
+          const r = await edCrepeBatch(f.frames);
+          midi.set(r.midi.subarray(0, s1-s0), s0);
+          conf.set(r.conf.subarray(0, s1-s0), s0);
+          $('edMsg').textContent = 'Listening to your take… '+Math.round(100*s1/midi.length)+'%';
+        }
+        const t0 = EDIT.takeT0 || 0;
+        const fresh = edNotesFromTrace(midi, conf, hop, t0);
+        if(!fresh.length){ $('edMsg').textContent = 'Could not hear a clear melody in that take.'; EDIT.busy = false; return; }
+        const tEnd = t0 + dur;
+        edPush();
+        EDIT.notes = EDIT.notes.filter(n => n.t + n.d < t0 || n.t > tEnd).concat(fresh);
+        EDIT.notes.sort((a,b)=>a.t-b.t);
+        EDIT.take = {t0, t1: tEnd};
+        EDIT.sel = -1;
+        edRefresh();
+        $('edMsg').textContent = 'Put '+fresh.length+' notes in from your take ('+fmtT(t0)+' to '+fmtT(tEnd)+
+          '). If they sit a hair early or late, use "take earlier/later" to line them up.';
+      }catch(err){
+        $('edMsg').textContent = 'Could not read that take: '+err.message;
+      }
+      EDIT.busy = false;
+    };
+    EDIT.playT = EDIT.playT || 0;
+    await edPlay();
+    EDIT.takeT0 = EDIT.audio ? EDIT.audio.currentTime : EDIT.playT;
+    rec.start();
+    $('edSingIn').textContent = 'Stop take';
+    $('edMsg').textContent = 'Recording — sing or hum the melody along with the song. Headphones give the cleanest result. Press Stop take when done.';
+  }catch(err){
+    EDIT.rec = null;
+    $('edSingIn').textContent = 'Sing it in';
+    $('edMsg').textContent = 'Could not record: '+err.message;
+  }
+}
+function edShiftTake(dt){
+  if(!EDIT.take){ $('edMsg').textContent = 'Nothing sung in yet to shift.'; return; }
+  edPush();
+  EDIT.notes.forEach(n => {
+    if(n.t >= EDIT.take.t0 - 0.5 && n.t <= EDIT.take.t1 + 0.5) n.t = Math.max(0, n.t + dt);
+  });
+  EDIT.take.t0 += dt; EDIT.take.t1 += dt;
+  edRefresh();
+  $('edMsg').textContent = 'Take moved '+(dt>0?'later':'earlier')+' by '+Math.abs(dt*1000).toFixed(0)+' ms.';
+}
+$('edFromAudio').addEventListener('click', edAddFromAudio);
+$('edSingIn').addEventListener('click', edSingIn);
+$('edTakeEarlier').addEventListener('click', ()=>edShiftTake(-0.03));
+$('edTakeLater').addEventListener('click', ()=>edShiftTake(0.03));
+
+/* ================= MIDI import =================
+   A MIDI file is sheet music a computer can read: every note's pitch and
+   timing, written by a person. Import one and the melody becomes a perfect
+   note map — no analysing, no guessing. The user supplies the file, the same
+   way they supply their lyrics. */
+
+function midiParse(buf){
+  const d = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+  let pos = 0;
+  function str4(){ const s = String.fromCharCode(u8[pos],u8[pos+1],u8[pos+2],u8[pos+3]); pos += 4; return s; }
+  function u32(){ const v = d.getUint32(pos); pos += 4; return v; }
+  function u16(){ const v = d.getUint16(pos); pos += 2; return v; }
+  if(str4() !== 'MThd') throw new Error('not a MIDI file');
+  const hlen = u32(), fmt = u16(), ntrk = u16(), division = u16();
+  pos += hlen - 6;
+  if(division & 0x8000) throw new Error('SMPTE-timed MIDI files are not supported');
+  const tracks = [];
+  const tempos = [{tick:0, uspq:500000}];   // 120 bpm unless the file says otherwise
+  for(let tr=0; tr<ntrk; tr++){
+    if(pos + 8 > u8.length) break;
+    if(str4() !== 'MTrk'){ break; }
+    const len = u32(), end = pos + len;
+    let tick = 0, running = 0, name = '';
+    const events = [];
+    const open = {};   // channel<<8|note -> {tick, vel}
+    while(pos < end){
+      let dt = 0, b;
+      do { b = u8[pos++]; dt = (dt<<7) | (b & 0x7f); } while(b & 0x80);
+      tick += dt;
+      let st = u8[pos];
+      if(st & 0x80){ pos++; if(st < 0xF0) running = st; }
+      else st = running;
+      if(st === 0xFF){                       // meta
+        const type = u8[pos++];
+        let mlen = 0;
+        do { b = u8[pos++]; mlen = (mlen<<7) | (b & 0x7f); } while(b & 0x80);
+        if(type === 0x51 && mlen === 3){
+          tempos.push({tick, uspq: (u8[pos]<<16)|(u8[pos+1]<<8)|u8[pos+2]});
+        } else if(type === 0x03 && !name){
+          name = String.fromCharCode.apply(null, u8.subarray(pos, pos+mlen));
+        }
+        pos += mlen;
+      } else if(st === 0xF0 || st === 0xF7){ // sysex
+        let mlen = 0;
+        do { b = u8[pos++]; mlen = (mlen<<7) | (b & 0x7f); } while(b & 0x80);
+        pos += mlen;
+      } else {
+        const kind = st & 0xF0, ch = st & 0x0F;
+        if(kind === 0x90 || kind === 0x80){
+          const note = u8[pos++], vel = u8[pos++];
+          const key = (ch<<8) | note;
+          if(kind === 0x90 && vel > 0){
+            open[key] = {tick, vel};
+          } else if(open[key]){
+            events.push({note, ch, on: open[key].tick, off: tick, vel: open[key].vel});
+            delete open[key];
+          }
+        }
+        else if(kind === 0xC0 || kind === 0xD0) pos += 1;
+        else pos += 2;                       // other channel messages
+      }
+    }
+    pos = end;
+    tracks.push({name, events});
+  }
+  tempos.sort((a,b)=>a.tick - b.tick);
+  // tick -> seconds through the tempo map
+  const spans = [];
+  let sec = 0;
+  for(let i=0;i<tempos.length;i++){
+    const next = tempos[i+1];
+    spans.push({tick: tempos[i].tick, sec, spt: tempos[i].uspq/1e6/division});
+    if(next) sec += (next.tick - tempos[i].tick) * tempos[i].uspq/1e6/division;
+  }
+  function tickSec(t){
+    let sp = spans[0];
+    for(const s of spans){ if(s.tick <= t) sp = s; else break; }
+    return sp.sec + (t - sp.tick)*sp.spt;
+  }
+  return tracks.map(tr => ({
+    name: tr.name,
+    notes: tr.events
+      .filter(e => e.ch !== 9)               // channel 10 is drums
+      .map(e => ({m: e.note, t: tickSec(e.on), d: Math.max(0.08, tickSec(e.off) - tickSec(e.on))}))
+      .sort((a,b)=>a.t - b.t)
+  })).filter(tr => tr.notes.length);
+}
+
+/* which track is the melody? favour a singable register, one note at a time,
+   and names that say so */
+function midiTrackScore(tr){
+  const ns = tr.notes;
+  let inRange = 0, overlap = 0;
+  for(let i=0;i<ns.length;i++){
+    if(ns[i].m >= 48 && ns[i].m <= 84) inRange++;
+    if(i && ns[i].t < ns[i-1].t + ns[i-1].d - 0.03) overlap++;
+  }
+  let score = 100*inRange/ns.length - 120*overlap/ns.length;
+  if(ns.length < 8) score -= 50;   // a tiny track is rarely the melody, but may be all there is
+  if(/vocal|voice|melody|lead|sing/i.test(tr.name||'')) score += 60;
+  if(/bass|drum|perc/i.test(tr.name||'')) score -= 80;
+  score += Math.min(20, ns.length/10);
+  return score;
+}
+/* a melody line is one note at a time: keep the top note of any pile-up */
+function midiMonophonic(notes){
+  const out = [];
+  for(const n of notes){
+    const last = out[out.length-1];
+    if(last && n.t < last.t + last.d - 0.03){
+      if(n.m > last.m){ last.d = Math.max(0.08, n.t - last.t); out.push({m:n.m, t:n.t, d:n.d}); }
+      // a lower simultaneous note is harmony under the melody: skip it
+    } else out.push({m:n.m, t:n.t, d:n.d});
+  }
+  return out;
+}
+
+const MIDI_IMP = { tracks:null };
+function midiUseTrack(i){
+  const tr = MIDI_IMP.tracks[i];
+  if(!tr) return;
+  const notes = midiMonophonic(tr.notes).map(n => ({m:n.m, t:n.t, d:n.d, ly:'', p:0}));
+  edPush();
+  EDIT.notes = notes;
+  EDIT.sel = -1;
+  EDIT.take = notes.length ? {t0: notes[0].t, t1: notes[notes.length-1].t + notes[notes.length-1].d} : null;
+  EDIT.viewT = notes.length ? Math.max(0, notes[0].t - 1) : 0;
+  EDIT.playT = EDIT.viewT;
+  edRefresh();
+  $('edMsg').textContent = 'Loaded '+notes.length+' notes from "'+(tr.name || ('track '+(i+1)))+
+    '". Press Play — if the notes sit early or late against the song, use take earlier/later, '+
+    'then put your words on and Save.';
+}
+function midiFillTrackSel(){
+  const sel = $('midiTrackSel');
+  sel.innerHTML = '';
+  MIDI_IMP.tracks.forEach((tr, i) => {
+    const o = document.createElement('option');
+    o.value = i;
+    o.textContent = (tr.name || 'track '+(i+1)) + ' — ' + tr.notes.length + ' notes';
+    sel.appendChild(o);
+  });
+  sel.style.display = MIDI_IMP.tracks.length > 1 ? '' : 'none';
+}
+$('midiFile').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if(!f) return;
+  try{
+    const tracks = midiParse(await f.arrayBuffer());
+    if(!tracks.length) throw new Error('no notes in this file');
+    MIDI_IMP.tracks = tracks;
+    if(!EDIT.on) edOpen(SONGLIB.song);
+    let best = 0, bs = -1e18;
+    tracks.forEach((tr, i) => { const sc = midiTrackScore(tr); if(sc > bs){ bs = sc; best = i; } });
+    midiFillTrackSel();
+    $('midiTrackSel').value = String(best);
+    midiUseTrack(best);
+  }catch(err){
+    if(EDIT.on) $('edMsg').textContent = 'Could not read that MIDI file: '+err.message;
+    else libNotice('Could not read that MIDI file: '+err.message);
+  }
+});
+$('midiTrackSel').addEventListener('change', ()=>midiUseTrack(+$('midiTrackSel').value));
+
+$('btnEditMap').addEventListener('click', ()=>edOpen(SONGLIB.song));
 $('btnPreviewMap').addEventListener('click', ()=>mapPreviewStart(SONGLIB.song));
 $('btnMapSrc').addEventListener('click', ()=>{
   const song = SONGLIB.song;
