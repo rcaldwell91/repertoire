@@ -320,7 +320,7 @@
         </select>
         <button class="btn" id="btnPreviewMap" style="display:none">Preview map</button>
         <button class="btn" id="btnEditMap" style="display:none">Edit map</button>
-        <label class="btn" style="cursor:pointer">Import MIDI<input type="file" id="midiFile" accept=".mid,.midi,audio/midi,audio/x-midi" style="display:none"></label>
+        <label class="btn" style="cursor:pointer">Import MIDI<input type="file" id="midiFile" style="display:none"></label>
         <button class="btn" id="btnMapSrc" style="display:none">Use imported pack</button>
         <button class="btn primary" id="btnBuildMap">Build note map</button>
       </div>
@@ -338,7 +338,10 @@
         </div>
       </div>
       <canvas id="editCanvas" style="width:100%;display:block;margin-top:8px;border-radius:10px;touch-action:none"></canvas>
-      <input type="range" id="edScrub" min="0" max="1000" value="0" style="width:100%;margin-top:6px">
+      <div class="row" style="gap:8px;align-items:center;margin-top:6px">
+        <input type="range" id="edScrub" min="0" max="1000" value="0" class="grow">
+        <b id="edTime" style="min-width:74px;text-align:right;font-variant-numeric:tabular-nums">0:00</b>
+      </div>
       <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
         <button class="btn" id="edAdd">&#65291; Note</button>
         <button class="btn" id="edDel">Delete</button>
@@ -353,6 +356,7 @@
         <select id="midiTrackSel" style="display:none;min-width:160px"></select>
         <button class="btn" id="edFromAudio">&#65291; from audio</button>
         <button class="btn primary" id="edSingIn">Sing it in</button>
+        <button class="btn" id="edLineUp">Line up take</button>
         <button class="btn" id="edTakeEarlier">take earlier</button>
         <button class="btn" id="edTakeLater">take later</button>
       </div>
@@ -371,6 +375,7 @@
       </details>
       <div class="row" style="gap:6px;margin-top:8px">
         <button class="btn primary" id="edSave">Save changes</button>
+        <button class="btn" id="edExport">Save map to a file</button>
         <button class="btn" id="edUndo">Undo</button>
         <button class="btn" id="edRevert">Revert all</button>
       </div>
@@ -2962,6 +2967,8 @@ function edDraw(){
     lastR = x + ecx.measureText(ly).width;
   });
   ecx.restore();
+  const tEl = $('edTime');
+  if(tEl) tEl.textContent = fmtT(EDIT.playT);
   // playhead
   const px = edX(EDIT.playT);
   if(px >= 0 && px <= W){
@@ -3443,6 +3450,62 @@ $('edSingIn').addEventListener('click', edSingIn);
 $('edTakeEarlier').addEventListener('click', ()=>edShiftTake(-0.03));
 $('edTakeLater').addEventListener('click', ()=>edShiftTake(0.03));
 
+/* ---- line a take up with the song in one press ----
+   A MIDI file starts at zero; the song has an intro. Nudging 30 ms at a time
+   would take hundreds of presses, so: put the playhead where the singing
+   starts and snap the whole take to it. */
+function edLineUpTake(){
+  if(!EDIT.take || !EDIT.notes.length){
+    $('edMsg').textContent = 'Import a MIDI or sing a take in first, then this lines it up.';
+    return;
+  }
+  const inTake = EDIT.notes.filter(n => n.t >= EDIT.take.t0 - 0.5 && n.t <= EDIT.take.t1 + 0.5);
+  if(!inTake.length){ $('edMsg').textContent = 'Nothing in the take to line up.'; return; }
+  let first = inTake[0].t;
+  inTake.forEach(n => { if(n.t < first) first = n.t; });
+  const dt = EDIT.playT - first;
+  edPush();
+  inTake.forEach(n => { n.t = Math.max(0, n.t + dt); });
+  EDIT.take.t0 += dt; EDIT.take.t1 += dt;
+  EDIT.notes.sort((a,b)=>a.t-b.t);
+  edRefresh();
+  $('edMsg').textContent = 'Moved the whole take '+(dt>=0?'later':'earlier')+' by '+
+    Math.abs(dt).toFixed(2)+'s so it starts at '+fmtT(EDIT.playT)+
+    '. Press Play to check, then take earlier/later for the last little bit.';
+}
+/* ---- save the map to a file: a backup, and how it reaches your other device ---- */
+function edExportMap(){
+  const song = EDIT.song || SONGLIB.song;
+  if(!song){ return; }
+  const pack = libPackBest(song);
+  if(!pack || !pack.notes.length){
+    $('edMsg').textContent = 'There is no note map to save yet.';
+    return;
+  }
+  const title = song.artist && song.artist !== 'Unknown artist'
+    ? song.title + ' — ' + song.artist : song.title;
+  const out = {
+    title: title,
+    bpm: pack.bpm, beatsPerBar: pack.beatsPerBar || 4,
+    transposeDefault: pack.transposeDefault || 0,
+    notes: pack.notes.map(n => ({m:n.m, t:n.t, d:n.d, ly:n.ly||'', p:n.p||0})),
+    chords: [], noDrums: true, windowY: true, guideVoice: 'piano',
+    audioDataUrl: null, audioOffsetSec: pack.audioOffsetSec || 0
+  };
+  const blob = new Blob([JSON.stringify(out)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = title.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') + '.repertoire.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  $('edMsg').textContent = 'Saved '+a.download+' to your downloads. Send it to your other device and '+
+    'use Import song pack there — with the same song in that Library, it will line up automatically.';
+}
+$('edLineUp').addEventListener('click', edLineUpTake);
+$('edExport').addEventListener('click', edExportMap);
+
 /* ================= MIDI import =================
    A MIDI file is sheet music a computer can read: every note's pitch and
    timing, written by a person. Import one and the melody becomes a perfect
@@ -3574,8 +3637,9 @@ function midiUseTrack(i){
   EDIT.playT = EDIT.viewT;
   edRefresh();
   $('edMsg').textContent = 'Loaded '+notes.length+' notes from "'+(tr.name || ('track '+(i+1)))+
-    '". Press Play — if the notes sit early or late against the song, use take earlier/later, '+
-    'then put your words on and Save.';
+    '". A MIDI starts at zero, so it will not match the song yet: drag the slider to where the '+
+    'singing starts, tap the picture there, then press Line up take. Then Play to check, take '+
+    'earlier/later for the last bit, words on, Save.';
 }
 function midiFillTrackSel(){
   const sel = $('midiTrackSel');
