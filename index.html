@@ -236,6 +236,9 @@
 <symbol id="i-layers" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol>
 <symbol id="i-package" viewBox="0 0 24 24"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></symbol>
 </defs></svg>
+<div id="audioBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:200;
+  background:#f2c14e;color:#231a00;font-weight:800;font-size:13.5px;line-height:1.35;
+  padding:11px 14px;text-align:center;cursor:pointer"></div>
 <div class="wrap">
   <header>
     <div class="logo"><div class="mic-ic"><svg class="ic" style="width:18px;height:18px"><use href="#i-mic"/></svg></div><div>Repertoire<small>SING · TRAIN · OWN YOUR MUSIC</small></div></div>
@@ -649,6 +652,24 @@
       <div class="stat"><div class="v blue" id="freeHz">–</div><div class="l">Hz</div></div>
       <div class="stat"><div class="v" id="freeSteady">–</div><div class="l">Steadiness</div></div>
     </div>
+    <div class="row" style="gap:8px;align-items:center;margin-top:10px">
+      <span class="pill" style="flex:none">Input</span>
+      <div class="micmeter grow" style="margin:0"><i id="freeLevel"></i></div>
+      <b id="freeLevelTxt" style="font-size:11px;color:var(--ink-dim);min-width:74px;text-align:right">no signal</b>
+    </div>
+    <div class="panel" style="margin-top:10px;padding:12px">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <b style="font-size:13px">Mic check</b>
+        <div class="row" style="gap:6px">
+          <button class="btn" id="btnMicRetry" style="padding:7px 10px;font-size:12px">Retry mic</button>
+          <button class="btn" id="btnMicMode" style="padding:7px 10px;font-size:12px">Try another mode</button>
+        </div>
+      </div>
+      <select id="micDevSel" style="display:none;margin-top:8px;width:100%;min-width:0"></select>
+      <div id="micCheck" style="margin-top:8px;font-size:12px;display:grid;gap:3px"></div>
+      <div class="notice" id="micCheckMsg" style="margin-top:6px">If the level stays silent while you sing, press
+        <b>Try another mode</b> — some phones only give sound on one of them.</div>
+    </div>
     <div style="margin-top:10px"><canvas id="freeCanvas"></canvas></div>
     <div class="panel notice" style="margin-top:10px">The horizontal lines are notes (C in gold). Hold a note and try to keep your blue line flat and centered on a note line. Steadiness scores how level you hold your pitch.</div>
   </div>
@@ -985,21 +1006,144 @@ function schedule(){
 /* ================= MICROPHONE + PITCH DETECTION ================= */
 const MIC = { on:false, analyser:null, buf:null, stream:null, level:0 };
 
-async function startMic(){
-  ensureCtx();
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:false }
-  });
-  MIC.stream = stream;
+/* ---- microphone with fallbacks and a visible check -----------------------
+   Pitch tracking wants the RAW mic (no echo cancellation, no noise gate, no
+   auto gain) because that processing chews up a sustained note. But some
+   Android phones — Samsung especially — hand back a permanently SILENT stream
+   when you ask for the raw path. So: ask for raw, prove it actually carries
+   sound, and walk down to more processed settings until one does. Whatever we
+   end up on is shown on screen, so a dead mic can never look like a dead app
+   again. --------------------------------------------------------------- */
+const MIC_PROFILES = [
+  {name:'raw', c:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}},
+  {name:'default', c:true},
+  {name:'processed', c:{echoCancellation:true, noiseSuppression:true, autoGainControl:true}},
+  {name:'basic', c:{echoCancellation:false}}
+];
+
+function micStopStream(st){
+  try{ if(st) st.getTracks().forEach(t => t.stop()); }catch(e){}
+}
+function micAttach(stream){
   const src = ctx.createMediaStreamSource(stream);
   const an = ctx.createAnalyser();
   an.fftSize = 4096;
-  micModelStart();
   src.connect(an);
   MIC.analyser = an;
   MIC.buf = new Float32Array(an.fftSize);
+  MIC.stream = stream;
   MIC.on = true;
 }
+/* listen for a moment and report the loudest thing we heard */
+async function micProbe(ms){
+  const buf = MIC.buf;
+  let peak = 0;
+  const until = performance.now() + (ms || 700);
+  while(performance.now() < until){
+    MIC.analyser.getFloatTimeDomainData(buf);
+    let s = 0;
+    for(let i=0;i<buf.length;i++){ const v = buf[i]; s += v*v; }
+    peak = Math.max(peak, Math.sqrt(s/buf.length));
+    await new Promise(r => setTimeout(r, 45));
+  }
+  return peak;
+}
+async function startMic(opts){
+  opts = opts || {};
+  ensureCtx();
+  audioNudge();
+  const wanted = opts.deviceId || MIC.deviceId || null;
+  const from = (opts.profile != null) ? opts.profile : 0;
+  let lastErr = null, best = null;
+
+  for(let p = from; p < MIC_PROFILES.length; p++){
+    const prof = MIC_PROFILES[p];
+    let audio = (prof.c === true) ? {} : Object.assign({}, prof.c);
+    if(wanted) audio.deviceId = {exact: wanted};
+    let stream;
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({audio: (prof.c === true && !wanted) ? true : audio});
+    }catch(err){
+      lastErr = err;
+      if(wanted){                       // that device may be gone — retry without it
+        try{ stream = await navigator.mediaDevices.getUserMedia({audio: prof.c === true ? true : prof.c}); }
+        catch(e2){ continue; }
+      } else continue;
+    }
+    micStopStream(MIC.stream);
+    micAttach(stream);
+    MIC.profile = prof.name;
+    const tr = stream.getAudioTracks()[0];
+    MIC.deviceLabel = tr ? (tr.label || 'microphone') : 'microphone';
+    try{ MIC.deviceId = tr && tr.getSettings ? tr.getSettings().deviceId : null; }catch(e){}
+    micModelStart();
+
+    // if the sound clock is not running we cannot judge silence — take it and
+    // let the watchdog sort the clock out
+    if(!audioRunning()){ MIC.silent = false; micFillDevices(); micCheckUpdate(); return; }
+
+    const peak = await micProbe(700);
+    MIC.peak = peak;
+    if(peak > 0.002){ MIC.silent = false; micFillDevices(); micCheckUpdate(); return; }
+    if(!best || peak > best.peak) best = {peak, profile: prof.name};
+    // silent: fall through and try a more processed profile
+  }
+  MIC.silent = true;
+  micFillDevices(); micCheckUpdate();
+  if(!MIC.on && lastErr) throw lastErr;
+}
+/* let the singer pick the input, since phones love routing to Bluetooth */
+async function micFillDevices(){
+  const sel = document.getElementById('micDevSel');
+  if(!sel || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  try{
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput');
+    if(!devs.length) return;
+    sel.innerHTML = '';
+    devs.forEach((d, i) => {
+      const o = document.createElement('option');
+      o.value = d.deviceId;
+      o.textContent = d.label || ('Microphone ' + (i+1));
+      sel.appendChild(o);
+    });
+    if(MIC.deviceId) sel.value = MIC.deviceId;
+    sel.style.display = devs.length > 1 ? '' : 'none';
+  }catch(e){}
+}
+/* the on-screen mic check — numbers Robert can read or screenshot to me */
+function micCheckUpdate(){
+  const el = document.getElementById('micCheck');
+  if(!el) return;
+  const rows = [
+    ['Sound clock', audioRunning() ? 'running' : (typeof ctx !== 'undefined' && ctx ? ctx.state : 'not started')],
+    ['Microphone', MIC.on ? 'on' : 'off'],
+    ['Input mode', MIC.profile || '—'],
+    ['Device', MIC.deviceLabel || '—'],
+    ['Level now', MIC.on ? (MIC.level > 0.004 ? 'hearing you (' + MIC.level.toFixed(3) + ')'
+                                              : 'silent (' + (MIC.level || 0).toFixed(3) + ')') : '—']
+  ];
+  el.innerHTML = rows.map(r =>
+    '<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--ink-faint)">'
+    + r[0] + '</span><b>' + r[1] + '</b></div>').join('');
+}
+setInterval(micCheckUpdate, 700);
+
+/* try the next input mode by hand, for the phone that lies about all of them */
+let micModeIdx = 0;
+async function micNextMode(){
+  micModeIdx = (micModeIdx + 1) % MIC_PROFILES.length;
+  const note = document.getElementById('micCheckMsg');
+  if(note) note.textContent = 'Trying "' + MIC_PROFILES[micModeIdx].name + '" input mode…';
+  try{
+    await startMic({profile: micModeIdx, deviceId: (document.getElementById('micDevSel')||{}).value || null});
+    if(note) note.textContent = MIC.silent
+      ? 'Still silent on "' + MIC.profile + '". Try another mode, or another microphone above.'
+      : 'Working on "' + MIC.profile + '" — sing and watch the level.';
+  }catch(e){
+    if(note) note.textContent = 'That mode was refused: ' + e.message;
+  }
+}
+
 
 /* YIN pitch detector with a trained-model octave anchor. The fast tracker
    reads the note instantly; CREPE (in a background worker) confirms the
@@ -1059,7 +1203,7 @@ function detectPitch(){
   for(let i=0;i<SIZE;i++){ const v = buf[i]; rms += v*v; }
   rms = Math.sqrt(rms/SIZE);
   MIC.level = rms;
-  if(rms < 0.006){ PITCH_CACHE.f = -1; return -1; }       // quieter gate than before
+  if(rms < 0.004){ PITCH_CACHE.f = -1; return -1; }       // quieter gate than before
   micModelPoll(buf, sr);
   // YIN: cumulative mean normalised difference over a 1024-sample window
   const W = 1024;
@@ -1324,6 +1468,7 @@ function currentSong(){
 function startRun(){
   mapPreviewStop();
   ensureCtx();
+  audioNudge();
   try{ if(typeof libAudio!=='undefined' && !libAudio.paused){ libAudio.pause(); $('pbPlay').innerHTML=ICO('play'); } }catch(e){}
   if(guideGain) guideGain.gain.value = +$('rGuide').value/100;
   if(backGain)  backGain.gain.value  = +$('rBack').value/100;
@@ -1797,6 +1942,102 @@ function drawGame(){
   drawKeyRail(cx2, HN, lo, hi, yOf, G.liveKeyM);
 }
 
+/* ---- audio watchdog: keep the sound clock alive on phones ----------------
+   Android Chrome suspends the AudioContext whenever the page loses focus (a
+   screenshot, a notification, switching apps) and never resumes it. Everything
+   then freezes silently: the count-in sticks on its first number, and the mic
+   analyser hangs off that same clock, so the app hears nothing while still
+   showing "Mic live". This nudges the clock back on every gesture and every
+   return to the page, and says so out loud when it cannot. -------------- */
+const AUD = { lastCtxT:-1, lastWall:0, silentSince:0, msg:'', timer:null };
+
+function audioNudge(){                 // safe to call from anywhere, any time
+  try{
+    if(typeof ctx === 'undefined' || !ctx) return;
+    if(ctx.state !== 'running') ctx.resume().catch(()=>{});
+  }catch(e){}
+}
+function audioRunning(){
+  try{ return !!ctx && ctx.state === 'running'; }catch(e){ return false; }
+}
+/* rebuild the analyser off the live stream — cheap, and covers the case where
+   the old graph came back deaf after a long suspend */
+function micRewire(){
+  try{
+    if(!MIC.on || !MIC.stream || !ctx) return;
+    const tr = MIC.stream.getAudioTracks()[0];
+    if(!tr || tr.readyState !== 'live') return;
+    const src = ctx.createMediaStreamSource(MIC.stream);
+    const an = ctx.createAnalyser();
+    an.fftSize = 4096;
+    src.connect(an);
+    MIC.analyser = an;
+    MIC.buf = new Float32Array(an.fftSize);
+  }catch(e){}
+}
+function audioBanner(msg, action){
+  const el = document.getElementById('audioBanner');
+  if(!el) return;
+  if(!msg){ el.style.display = 'none'; AUD.msg = ''; return; }
+  if(AUD.msg !== msg){ el.textContent = msg; AUD.msg = msg; }
+  el.style.display = 'block';
+  el.dataset.action = action || 'resume';
+}
+function audioWatch(){
+  const needsAudio = (typeof MIC !== 'undefined' && MIC.on) ||
+                     (typeof G !== 'undefined' && G.running);
+  if(typeof ctx === 'undefined' || !ctx || !needsAudio){ audioBanner(''); return; }
+
+  if(!audioRunning()){
+    audioNudge();
+    audioBanner('Sound is paused on this phone — tap here to start it.', 'resume');
+    return;
+  }
+  // the clock says running: make sure it is actually moving
+  const now = performance.now(), t = ctx.currentTime;
+  if(AUD.lastCtxT >= 0 && now - AUD.lastWall > 900 && t <= AUD.lastCtxT + 0.001){
+    audioNudge(); micRewire();
+    audioBanner('Sound stalled — tap here to restart it.', 'resume');
+    AUD.lastCtxT = t; AUD.lastWall = now;
+    return;
+  }
+  if(now - AUD.lastWall > 900){ AUD.lastCtxT = t; AUD.lastWall = now; }
+
+  // running and moving: is the microphone actually hearing anything?
+  if(MIC.on){
+    if(MIC.level > 0.004){ AUD.silentSince = 0; }
+    else if(!AUD.silentSince){ AUD.silentSince = now; }
+    if(AUD.silentSince && now - AUD.silentSince > 6000){
+      audioBanner('Mic is on but hearing nothing. Close other apps using the mic '
+                + '(or unplug Bluetooth), then tap here.', 'rewire');
+      return;
+    }
+  }
+  audioBanner('');
+}
+function audioBannerTap(){
+  try{ ensureCtx(); }catch(e){}
+  audioNudge();
+  AUD.silentSince = 0; AUD.lastCtxT = -1;
+  // the clock resumes on the tap; the analyser has to be rebuilt on the
+  // revived context or it keeps handing back the silence it froze on
+  setTimeout(()=>{ if(audioRunning()) micRewire(); }, 60);
+  setTimeout(()=>{ if(audioRunning() && (!MIC.on || MIC.level > 0.004)) audioBanner(''); }, 500);
+}
+/* every gesture is a chance to resume — browsers only allow it from one */
+['pointerdown','touchstart','click','keydown'].forEach(ev =>
+  document.addEventListener(ev, audioNudge, {capture:true, passive:true}));
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible'){
+    audioNudge();
+    AUD.lastCtxT = -1; AUD.silentSince = 0;
+    setTimeout(()=>{ if(audioRunning()) micRewire(); }, 250);
+  }
+});
+window.addEventListener('focus', audioNudge);
+window.addEventListener('pageshow', audioNudge);
+AUD.timer = setInterval(audioWatch, 500);
+
 /* ---------- game loop ---------- */
 function gameFrame(){
   requestAnimationFrame(gameFrame);
@@ -1816,6 +2057,9 @@ function gameFrame(){
 
   const s = currentSong();
   const beat = songBeat();
+
+  // a phone that suspended the audio clock would sit here forever
+  if(!audioRunning()){ audioNudge(); drawGame(); return; }
 
   // count-in
   if(beat<0){
@@ -1933,6 +2177,13 @@ function freeFrame(dt){
     $('freeSteady').textContent = Math.max(0, Math.round(100 - sd))+'%';
   } else $('freeSteady').textContent='–';
 
+  const lvEl = $('freeLevel'), lvTx = $('freeLevelTxt');
+  if(lvEl){
+    lvEl.style.width = Math.min(100, MIC.level*900)+'%';
+    lvTx.textContent = !MIC.on ? 'mic off'
+      : !audioRunning() ? 'sound paused'
+      : MIC.level > 0.004 ? 'hearing you' : 'no signal';
+  }
   drawPitchLane(fcx, fcv, FREE.trail, now);
 }
 
@@ -2536,7 +2787,7 @@ requestAnimationFrame(gameFrame);
    runs the melody analyser on a library track, right here on the device, and
    stores the result so it plays with full bubbles like a processed pack.      */
 const ANALYZE = { busy:false, worker:null };
-const APP_VERSION = 'v7 \u00b7 keys + takes';
+const APP_VERSION = 'v8.1 \u00b7 mic rescue';
 try{ console.log('Repertoire build', APP_VERSION); }catch(e){}
 window.addEventListener('DOMContentLoaded', ()=>{ const bt=document.getElementById('buildTag'); if(bt) bt.textContent = APP_VERSION; });
 
@@ -4360,6 +4611,20 @@ $('btnJourney').addEventListener('click', ()=>{
 });
 
 /* bottom nav */
+$('audioBanner').addEventListener('click', audioBannerTap);
+$('btnMicMode').addEventListener('click', micNextMode);
+$('btnMicRetry').addEventListener('click', async ()=>{
+  const note = $('micCheckMsg');
+  note.textContent = 'Asking the phone for the microphone…';
+  try{
+    await startMic({deviceId: $('micDevSel').value || null});
+    note.textContent = MIC.silent
+      ? 'The phone gave us a silent microphone on every setting. Close other apps using '
+        + 'the mic, turn Bluetooth off, then press Retry mic.'
+      : 'Working on "'+MIC.profile+'" — sing and watch the level.';
+  }catch(e){ note.textContent = 'The phone refused: '+e.message; }
+});
+$('micDevSel').addEventListener('change', ()=>startMic({deviceId: $('micDevSel').value || null}));
 $('navHome').addEventListener('click', ()=>switchMode('home'));
 $('navTrain').addEventListener('click', ()=>switchMode('train'));
 $('navSing').addEventListener('click', ()=>switchMode('singhub'));
