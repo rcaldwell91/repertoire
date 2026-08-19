@@ -1033,6 +1033,35 @@ function micAttach(stream){
   MIC.buf = new Float32Array(an.fftSize);
   MIC.stream = stream;
   MIC.on = true;
+  /* Android says so out loud when another app (voice search, the assistant, a
+     recorder) takes the microphone: the track goes "muted" and comes back
+     "unmuted" when that app lets go. Without this the stream stays live and
+     silent forever and the app just looks broken. */
+  const tr = stream.getAudioTracks()[0];
+  if(tr){
+    MIC.stolen = !!tr.muted;
+    tr.onmute = () => { MIC.stolen = true; micCheckUpdate(); };
+    tr.onunmute = () => {
+      MIC.stolen = false;
+      setTimeout(()=>{ if(audioRunning()) micRewire(); }, 120);
+      micCheckUpdate();
+    };
+    tr.onended = () => { MIC.on = false; MIC.ended = true; micCheckUpdate(); };
+  }
+}
+/* the mic went quiet and stayed quiet: rebuild the graph, and if that is not
+   it, ask the phone for the microphone all over again */
+let micRecovering = false;
+async function micAutoRecover(){
+  if(micRecovering || !MIC.on) return;
+  micRecovering = true;
+  try{
+    micRewire();
+    if(await micProbe(500) > 0.002){ MIC.silent = false; return; }
+    const dev = (document.getElementById('micDevSel')||{}).value || null;
+    await startMic({deviceId: dev});
+  }catch(e){}
+  finally{ micRecovering = false; }
 }
 /* listen for a moment and report the loudest thing we heard */
 async function micProbe(ms){
@@ -1119,6 +1148,7 @@ function micCheckUpdate(){
     ['Microphone', MIC.on ? 'on' : 'off'],
     ['Input mode', MIC.profile || '—'],
     ['Device', MIC.deviceLabel || '—'],
+    ['Held by another app', MIC.stolen ? 'YES — that is the problem' : 'no'],
     ['Level now', MIC.on ? (MIC.level > 0.004 ? 'hearing you (' + MIC.level.toFixed(3) + ')'
                                               : 'silent (' + (MIC.level || 0).toFixed(3) + ')') : '—']
   ];
@@ -1978,7 +2008,7 @@ function micRewire(){
 function audioBanner(msg, action){
   const el = document.getElementById('audioBanner');
   if(!el) return;
-  if(!msg){ el.style.display = 'none'; AUD.msg = ''; return; }
+  if(!msg){ el.style.display = 'none'; el.textContent = ''; AUD.msg = ''; return; }
   if(AUD.msg !== msg){ el.textContent = msg; AUD.msg = msg; }
   el.style.display = 'block';
   el.dataset.action = action || 'resume';
@@ -2005,12 +2035,25 @@ function audioWatch(){
 
   // running and moving: is the microphone actually hearing anything?
   if(MIC.on){
-    if(MIC.level > 0.004){ AUD.silentSince = 0; }
+    // real sound arriving is proof nothing is holding the mic, whatever the
+    // track flag said a moment ago
+    if(MIC.level > 0.004){ AUD.silentSince = 0; AUD.tries = 0; MIC.stolen = false; }
     else if(!AUD.silentSince){ AUD.silentSince = now; }
-    if(AUD.silentSince && now - AUD.silentSince > 6000){
-      audioBanner('Mic is on but hearing nothing. Close other apps using the mic '
-                + '(or unplug Bluetooth), then tap here.', 'rewire');
+
+    if(MIC.stolen){                    // the phone told us who took it
+      audioBanner('Another app grabbed the mic (voice search / assistant). '
+                + 'Close it — or turn off "Hey Google" — then tap here.', 'rewire');
+      if(now - (AUD.lastTry||0) > 6000){ AUD.lastTry = now; micAutoRecover(); }
       return;
+    }
+    if(AUD.silentSince && now - AUD.silentSince > 3500){
+      // try to take it back on our own before nagging
+      if(now - (AUD.lastTry||0) > 6000){ AUD.lastTry = now; AUD.tries = (AUD.tries||0)+1; micAutoRecover(); }
+      if(AUD.silentSince && now - AUD.silentSince > 7000){
+        audioBanner('Mic is on but hearing nothing — trying to get it back. '
+                  + 'If this stays, close voice search / other mic apps, then tap here.', 'rewire');
+        return;
+      }
     }
   }
   audioBanner('');
@@ -2787,7 +2830,7 @@ requestAnimationFrame(gameFrame);
    runs the melody analyser on a library track, right here on the device, and
    stores the result so it plays with full bubbles like a processed pack.      */
 const ANALYZE = { busy:false, worker:null };
-const APP_VERSION = 'v8.1 \u00b7 mic rescue';
+const APP_VERSION = 'v8.2 \u00b7 mic guard';
 try{ console.log('Repertoire build', APP_VERSION); }catch(e){}
 window.addEventListener('DOMContentLoaded', ()=>{ const bt=document.getElementById('buildTag'); if(bt) bt.textContent = APP_VERSION; });
 
