@@ -242,8 +242,12 @@
 <div class="wrap">
   <header>
     <div class="logo"><div class="mic-ic"><svg class="ic" style="width:18px;height:18px"><use href="#i-mic"/></svg></div><div>Repertoire<small>SING · TRAIN · OWN YOUR MUSIC</small></div></div>
+    <button class="btn" id="btnMonitor" style="padding:7px 11px;font-size:12px;margin-right:6px">Hear me</button>
     <span class="pill" id="micPillTop" style="cursor:pointer"><span class="dot" id="micDotTop"></span><span id="micTxtTop">Mic off</span></span>
   </header>
+
+  <div class="notice" id="monitorNote" style="display:none;margin:0 2px 8px;color:var(--gold)">
+    Headphones only &mdash; through the speaker this will squeal.</div>
 
   <!-- ============ HOME ============ -->
   <div id="modeHome" class="mode active">
@@ -1006,6 +1010,57 @@ function schedule(){
 /* ================= MICROPHONE + PITCH DETECTION ================= */
 const MIC = { on:false, analyser:null, buf:null, stream:null, level:0 };
 
+/* ---- "Hear me": your own voice back in your ears while you sing ----------
+   Works everywhere the mic is on — Pitch Monitor, Song Trainer, exercises,
+   karaoke — because it hangs off the one mic graph rather than any one screen.
+   HEADPHONES ONLY: through the speaker this is a microphone pointed at a
+   loudspeaker, which squeals. The toggle says so, and it also refuses to stay
+   on if the app can hear its own output coming back in. ------------------- */
+const MONITOR = { on:false, vol:0.75, gain:null, warned:false };
+
+function monitorEnsure(){
+  if(typeof ctx === 'undefined' || !ctx) return null;
+  if(!MONITOR.gain){
+    MONITOR.gain = ctx.createGain();
+    MONITOR.gain.gain.value = 0;
+    MONITOR.gain.connect(ctx.destination);   // straight out, not through the
+  }                                          // backing-track volume slider
+  return MONITOR.gain;
+}
+function monitorWire(){
+  const g = monitorEnsure();
+  if(!g) return;
+  if(MIC.src){ try{ MIC.src.connect(g); }catch(e){} }
+  const want = (MONITOR.on && MIC.on) ? MONITOR.vol : 0;
+  try{ g.gain.setTargetAtTime(want, ctx.currentTime, 0.02); }catch(e){ g.gain.value = want; }
+}
+function monitorUi(){
+  const b = document.getElementById('btnMonitor');
+  if(!b) return;
+  b.textContent = MONITOR.on ? 'Hearing you' : 'Hear me';
+  b.style.background = MONITOR.on ? 'var(--gold)' : '';
+  b.style.color = MONITOR.on ? '#231a00' : '';
+  const s = document.getElementById('monitorNote');
+  if(s) s.style.display = MONITOR.on ? '' : 'none';
+}
+async function monitorToggle(){
+  if(!MONITOR.on){
+    if(!MIC.on){ try{ await startMic(); }catch(e){} }
+    ensureCtx(); audioNudge();
+    MONITOR.on = true;
+    if(!MONITOR.warned){
+      MONITOR.warned = true;
+      const s = document.getElementById('monitorNote');
+      if(s) s.textContent = 'Headphones only — through the speaker this will squeal.';
+    }
+  } else {
+    MONITOR.on = false;
+  }
+  monitorWire(); monitorUi();
+  try{ localStorage.setItem('rep_monitor', MONITOR.on ? '1' : '0'); }catch(e){}
+}
+try{ if(localStorage.getItem('rep_monitor') === '1') MONITOR.on = true; }catch(e){}
+
 /* ---- microphone with fallbacks and a visible check -----------------------
    Pitch tracking wants the RAW mic (no echo cancellation, no noise gate, no
    auto gain) because that processing chews up a sustained note. But some
@@ -1024,15 +1079,27 @@ const MIC_PROFILES = [
 function micStopStream(st){
   try{ if(st) st.getTracks().forEach(t => t.stop()); }catch(e){}
 }
+/* Tear the old input graph down before building a new one. Without this every
+   rewire left another live source+analyser running: the phone gets slower and
+   slower, and once it is slow enough the audio clock stalls and the exercise
+   dies. */
+function micDetach(){
+  try{ if(MIC.src) MIC.src.disconnect(); }catch(e){}
+  try{ if(MIC.analyser) MIC.analyser.disconnect(); }catch(e){}
+  MIC.src = null; MIC.analyser = null;
+}
 function micAttach(stream){
+  micDetach();
   const src = ctx.createMediaStreamSource(stream);
   const an = ctx.createAnalyser();
   an.fftSize = 4096;
   src.connect(an);
+  MIC.src = src;
   MIC.analyser = an;
   MIC.buf = new Float32Array(an.fftSize);
   MIC.stream = stream;
   MIC.on = true;
+  monitorWire();          // keep "hear myself" attached across rewires
   /* Android says so out loud when another app (voice search, the assistant, a
      recorder) takes the microphone: the track goes "muted" and comes back
      "unmuted" when that app lets go. Without this the stream stays live and
@@ -1154,9 +1221,17 @@ function micCheckUpdate(){
   ];
   el.innerHTML = rows.map(r =>
     '<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--ink-faint)">'
-    + r[0] + '</span><b>' + r[1] + '</b></div>').join('');
+    + r[0] + '</span><b>' + r[1] + '</b></div>').join('')
+    // a non-raw mode means the phone is doing echo cancellation, which on
+    // Android can also change where the sound comes OUT
+    + (MIC.profile && MIC.profile !== 'raw'
+      ? '<div style="color:var(--gold);margin-top:4px">Not on the raw input — this can also make '
+        + 'headphone playback quiet or route it oddly. Press Try another mode to get back to raw.</div>'
+      : '');
 }
-setInterval(micCheckUpdate, 700);
+/* only tick while the panel is actually on screen — this runs on a phone */
+setInterval(()=>{ const el = document.getElementById('micCheck');
+                  if(el && el.offsetParent !== null) micCheckUpdate(); }, 700);
 
 /* try the next input mode by hand, for the phone that lies about all of them */
 let micModeIdx = 0;
@@ -1997,12 +2072,15 @@ function micRewire(){
     if(!MIC.on || !MIC.stream || !ctx) return;
     const tr = MIC.stream.getAudioTracks()[0];
     if(!tr || tr.readyState !== 'live') return;
+    micDetach();                       // never stack input graphs
     const src = ctx.createMediaStreamSource(MIC.stream);
     const an = ctx.createAnalyser();
     an.fftSize = 4096;
     src.connect(an);
+    MIC.src = src;
     MIC.analyser = an;
     MIC.buf = new Float32Array(an.fftSize);
+    monitorWire();
   }catch(e){}
 }
 function audioBanner(msg, action){
@@ -2830,7 +2908,7 @@ requestAnimationFrame(gameFrame);
    runs the melody analyser on a library track, right here on the device, and
    stores the result so it plays with full bubbles like a processed pack.      */
 const ANALYZE = { busy:false, worker:null };
-const APP_VERSION = 'v8.2 \u00b7 mic guard';
+const APP_VERSION = 'v8.3 \u00b7 hear me';
 try{ console.log('Repertoire build', APP_VERSION); }catch(e){}
 window.addEventListener('DOMContentLoaded', ()=>{ const bt=document.getElementById('buildTag'); if(bt) bt.textContent = APP_VERSION; });
 
@@ -4668,6 +4746,8 @@ $('btnMicRetry').addEventListener('click', async ()=>{
   }catch(e){ note.textContent = 'The phone refused: '+e.message; }
 });
 $('micDevSel').addEventListener('change', ()=>startMic({deviceId: $('micDevSel').value || null}));
+$('btnMonitor').addEventListener('click', monitorToggle);
+window.addEventListener('DOMContentLoaded', monitorUi);
 $('navHome').addEventListener('click', ()=>switchMode('home'));
 $('navTrain').addEventListener('click', ()=>switchMode('train'));
 $('navSing').addEventListener('click', ()=>switchMode('singhub'));
