@@ -8,200 +8,297 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --bg:#0e1016; --bg2:#12151d; --panel:#151924; --panel2:#1d2330;
-    --ink:#eef1f7; --ink-dim:#9aa3b8; --ink-faint:#68718a;
-    --gold:#f2c14e; --gold-deep:#d99f2b; --hit:#3ddc84; --miss:#ff5d73;
-    --accent:#7c6cff; --accent2:#4cc9f0; --pink:#f472b6; --line:#262d3d;
-    --grad-main:linear-gradient(135deg,#7c6cff,#4cc9f0);
-    --grad-cool:linear-gradient(135deg,#4cc9f0,#7c6cff);
-    --radius:16px;
-  }
-  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
-  html,body{height:100%;}
-  body{
-    font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    background:
-      radial-gradient(900px 600px at 80% -20%, rgba(124,108,255,.10) 0%, transparent 60%),
-      var(--bg) fixed;
-    color:var(--ink); overflow-x:hidden;
-  }
-  .wrap{max-width:1060px; margin:0 auto; padding:14px 14px 96px;}
-  /* ---- bottom nav ---- */
-  .bottomnav{
-    position:fixed; bottom:0; left:0; right:0; z-index:60;
-    display:flex; justify-content:space-around;
-    background:rgba(14,16,22,.94); backdrop-filter:blur(14px);
-    border-top:1px solid var(--line);
-    padding:7px 4px calc(7px + env(safe-area-inset-bottom,0px));
-  }
-  .bottomnav button{
-    background:none; border:0; color:var(--ink-faint); font-size:11px; font-weight:800;
-    display:flex; flex-direction:column; align-items:center; gap:2px;
-    padding:6px 16px; border-radius:14px; cursor:pointer; letter-spacing:.3px;
-  }
-  .bottomnav button .ni{font-size:21px; line-height:1;}
-  .bottomnav button.active{color:#fff; background:rgba(124,108,255,.18);}
-  /* ---- home / hero ---- */
-  .hero{
-    background:var(--panel); border:1px solid var(--line);
-    border-radius:22px; padding:20px 18px;
-    position:relative; overflow:hidden;
-  }
-  
-  .hero .kicker{font-size:11px; font-weight:900; letter-spacing:2px; opacity:.85;}
-  .hero h2{font-size:22px; margin:4px 0 2px;}
-  .hero .sub{font-size:13px; opacity:.9; font-weight:600;}
-  .jsteps{display:flex; gap:8px; margin:14px 0;}
-  .jstep{flex:1; background:var(--panel2); border:1.5px solid var(--line); border-radius:16px; padding:10px 6px; text-align:center; transition:all .2s;}
-  .jstep .em{font-size:24px;}
-  .jstep .jl{font-size:12.5px; font-weight:900; margin-top:2px;}
-  .jstep .js{font-size:10px; opacity:.8; font-weight:700;}
-  .jstep.done{background:rgba(124,108,255,.18); border-color:var(--accent);}
-  .jstep.done .em::after{content:' ✓';}
-  .jstep.current{border-color:var(--gold); background:var(--panel2);}
-  #btnJourney{
-    width:100%; border:0; border-radius:16px; padding:15px; font-size:17px; font-weight:900;
-    background:var(--accent); color:#fff; cursor:pointer;
-  }
-  #btnJourney:active{transform:scale(.98);}
-  .mcard{
-    background:var(--panel); border:1.5px solid var(--line); border-radius:18px; padding:16px;
-    display:flex; align-items:center; gap:12px; cursor:pointer; transition:transform .1s;
-  }
-  .mcard:active{transform:scale(.97);}
-  .mcard .mi{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;flex:none;}
-  .mcard h4{font-size:15px;margin:0 0 2px;}
-  .mcard p{font-size:11.5px;color:var(--ink-dim);margin:0;line-height:1.4;}
-  .mcard .chev{margin-left:auto;color:var(--ink-faint);font-size:18px;}
-  .hue1 .mi,.hue2 .mi,.hue3 .mi,.hue4 .mi,.hue5 .mi{background:rgba(124,108,255,.16); border:1px solid var(--line);}
-  .homegrid{display:grid; grid-template-columns:1fr; gap:8px; margin-top:10px;}
-  @media (max-width:400px){ .homegrid{grid-template-columns:1fr;} }
-  .backpill{cursor:pointer; margin-bottom:10px;}
-  header{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 2px 14px;}
-  .logo{display:flex; align-items:center; gap:10px; font-weight:800; font-size:20px; letter-spacing:.3px;}
-  .logo .mic-ic{width:34px;height:34px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:18px;}
-  .logo small{display:block;font-weight:500;font-size:11px;color:var(--ink-dim);letter-spacing:1px;}
-  .tabs{display:flex; flex-wrap:wrap; gap:6px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:4px;}
-  .tabs button{
-    border:0; background:transparent; color:var(--ink-dim); font-weight:700; font-size:13px;
-    padding:8px 14px; border-radius:9px; cursor:pointer; transition:all .15s;
-  }
-  .tabs button.active{background:var(--accent); color:#fff;}
-  .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px;}
-  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
-  .grow{flex:1 1 auto;}
-  select,button.btn,input[type="file"]{
-    background:var(--panel2); color:var(--ink); border:1px solid var(--line);
-    border-radius:10px; padding:10px 12px; font-size:14px; font-weight:600;
-  }
-  select{min-width:210px; cursor:pointer;}
-  button.btn{cursor:pointer; transition:transform .06s, box-shadow .15s;}
-  button.btn:active{transform:scale(.97);}
-  button.btn.primary{background:var(--gold); color:#231a00; border:0; font-weight:800; padding:10px 22px;}
-  button.btn.play{font-size:15px;}
-  button.btn.ghost{background:transparent;}
-  button.btn.danger{color:var(--miss); border-color:#57324a;}
-  button.btn:disabled{opacity:.45; cursor:not-allowed;}
-  .pill{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12px;color:var(--ink-dim);font-weight:600;}
-  .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--miss);}
-  .pill .dot.on{background:var(--hit); box-shadow:0 0 8px var(--hit);}
-  .hud{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0;}
-  .stat{flex:1 1 100px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 12px; text-align:center;}
-  .stat .v{font-size:22px; font-weight:800; letter-spacing:.5px;}
-  .stat .l{font-size:10px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:1.4px; margin-top:2px;}
-  .stat .v.gold{color:var(--gold);}
-  .stat .v.green{color:var(--hit);}
-  .stat .v.blue{color:var(--accent2);}
-  #stage{position:relative; border-radius:var(--radius); overflow:hidden; border:1px solid var(--line); background:#0b0d13;}
-  #gameCanvas{display:block; width:100%; touch-action:none;}
-  #lyricsBar{
-    background:linear-gradient(180deg, #141936, #10142c); border-top:1px solid var(--line);
-    padding:14px 12px 16px; text-align:center; min-height:86px;
-  }
-  #lyricNow{font-size:24px; font-weight:800; line-height:1.35; min-height:34px;}
-  #lyricNow .sung{color:var(--gold);}
-  #lyricNow .cur{color:#fff; text-shadow:0 0 14px rgba(255,209,102,.8); border-bottom:3px solid var(--gold); border-radius:2px;}
-  #lyricNow .rest{color:var(--ink-dim);}
-  #lyricNext{font-size:15px; color:var(--ink-faint); margin-top:6px; font-weight:600;}
-  .controls{margin-top:12px;}
-  .ctl-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:10px;}
-  .ctl{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:10px 12px;}
-  .ctl label{display:flex; justify-content:space-between; font-size:12px; color:var(--ink-dim); font-weight:700; margin-bottom:6px; letter-spacing:.4px;}
-  .ctl label output{color:var(--ink); font-weight:800;}
-  input[type=range]{width:100%; accent-color:var(--accent); height:26px;}
-  .switch{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; font-weight:700; color:var(--ink-dim);}
-  .switch input{transform:scale(1.35); accent-color:var(--gold);}
-  .micmeter{height:8px; border-radius:99px; background:#0a0d1f; overflow:hidden; margin-top:8px; border:1px solid var(--line);}
-  .micmeter i{display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--hit),var(--gold)); transition:width .06s linear;}
-  #results{
-    position:absolute; inset:0; background:rgba(8,10,24,.9); backdrop-filter:blur(6px);
-    display:none; align-items:center; justify-content:center; z-index:20;
-  }
-  #results .card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:26px 30px; text-align:center; max-width:420px; width:90%;}
-  #results .grade{font-size:64px; font-weight:900; color:var(--gold);}
-  #results .score{font-size:20px; font-weight:800; margin:6px 0 2px;}
-  #results .sub{color:var(--ink-dim); font-size:13px; margin-bottom:16px;}
-  .notice{font-size:12.5px; color:var(--ink-dim); line-height:1.5; margin-top:10px;}
-  .notice b{color:var(--gold);}
-  .mode{display:none;}
-  .mode.active{display:block;}
-  /* Free sing */
-  #freeCanvas{display:block;width:100%;border-radius:var(--radius);border:1px solid var(--line);background:#0b0d13;}
-  #bigNote{font-size:56px;font-weight:900;text-align:center;min-width:130px;}
-  #bigCents{text-align:center;font-size:13px;color:var(--ink-dim);font-weight:700;}
-  audio{width:100%; margin-top:10px; border-radius:10px;}
-  h3{font-size:15px; margin-bottom:8px;}
-  .startOverlay{
-    position:absolute; inset:0; z-index:15; display:flex; flex-direction:column; gap:12px;
-    align-items:center; justify-content:center; background:rgba(10,12,28,.72); backdrop-filter:blur(3px); text-align:center; padding:20px;
-  }
-  .startOverlay p{color:var(--ink-dim); font-size:13.5px; max-width:420px; line-height:1.5;}
-  .countdown{position:absolute; inset:0; z-index:14; display:none; align-items:center; justify-content:center; font-size:110px; font-weight:900; color:var(--gold); text-shadow:0 0 40px rgba(255,209,102,.5); pointer-events:none;}
-  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px;}
-  .card2{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:8px;}
-  
-  .card2 h3{margin:0;font-size:15px;}
-  .card2 p{font-size:12.5px;color:var(--ink-dim);line-height:1.45;flex:1;}
-  .card2 button{align-self:flex-start;}
-  .card2.game{border-color:#333d5c;background:var(--panel);}
-  input[type="text"]{
-    background:var(--panel2); color:var(--ink); border:1px solid var(--line);
-    border-radius:10px; padding:10px 12px; font-size:14px; font-weight:600; min-width:0;
-  }
-  .ytwrap{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);}
-  .ytwrap iframe, #ytPlayer{position:absolute;inset:0;width:100%;height:100%;border:0;}
-  /* library */
-  .librow{display:flex;align-items:center;gap:8px;padding:10px 8px;border-bottom:1px solid var(--line);}
-  .librow:last-child{border-bottom:0;}
-  .librow.playing{background:rgba(124,108,255,.12);border-radius:10px;}
-  .librow .meta{flex:1;min-width:0;cursor:pointer;}
-  .librow .t{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .librow .a{font-size:12px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .librow .keybadge{font-size:10px;font-weight:800;color:var(--gold);border:1px solid rgba(255,209,102,.4);border-radius:6px;padding:2px 6px;}
-  .iconbtn{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:7px 9px;cursor:pointer;font-size:13px;line-height:1;}
-  .iconbtn:active{transform:scale(.94);}
-  .playerbar{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;margin-top:10px;position:sticky;bottom:8px;z-index:30;box-shadow:0 -4px 24px rgba(0,0,0,.4);}
-  .playerbar .title{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .pbtn{background:none;border:0;color:var(--ink);font-size:22px;cursor:pointer;padding:4px 8px;}
-  .pbtn.small{font-size:15px;color:var(--ink-dim);}
-  .pbtn.on{color:var(--gold);}
-  #libSeek{width:100%;}
-  #libLyric{text-align:center;font-size:16px;font-weight:700;min-height:22px;color:var(--gold);}
-  #libLyricNext{text-align:center;font-size:12.5px;color:var(--ink-faint);min-height:16px;}
-  .emptybox{text-align:center;padding:30px 16px;color:var(--ink-dim);font-size:13.5px;line-height:1.6;}
-  h2,h3,h4,.logo,.hero h2,.stat .v,#bigNote,#ytNote,#matchTarget,#susTarget,#resGrade{font-family:'Sora','Inter',-apple-system,sans-serif;}
-  .ic{width:1.05em;height:1.05em;stroke:currentColor;fill:none;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;vertical-align:-0.16em;display:inline-block;}
-  .pbtn .ic{width:20px;height:20px;}
-  .mi .ic, .jstep .em .ic{color:#fff;}
-  .card2 .cardic{color:var(--accent2);margin-bottom:2px;}
-  .bottomnav .ni .ic{width:20px;height:20px;}
-  @media (max-width:640px){
-    .logo{font-size:16px;}
-    #lyricNow{font-size:19px;}
-    .stat .v{font-size:18px;}
-    .tabs button{padding:8px 10px; font-size:12px;}
-  }
+/* ===================================================================
+   Repertoire theme — v9
+   The rule: the glow belongs to live music, the gradient belongs to the
+   brand, everything else stays flat. Light mode drops the glow entirely
+   and lets the notes carry the gradient instead.
+   =================================================================== */
+:root{
+  --bg:#07080d; --bg2:#0b0d14; --panel:#10131c; --panel2:#161b27; --line:#1f2634;
+  --ink:#eef1f7; --ink-dim:#8d97ad; --ink-faint:#5d6679;
+  --gold:#ffc94d; --gold-deep:#e0a92e; --hit:#3ddc84; --miss:#ff5d73;
+  --accent:#8b6cff; --accent2:#22e0ff; --pink:#ec4899;
+  --grad:linear-gradient(135deg,#8b5cf6 0%,#3b82f6 52%,#ec4899 100%);
+  --glow:0 0 22px rgba(139,92,246,.45);
+  --stage:#05060a; --stage-line:rgba(255,255,255,.06);
+  --radius:16px;
+}
+body.light{
+  --bg:#f6f1eb; --bg2:#efe8df; --panel:#fffdfa; --panel2:#f0eae2; --line:#e2d9cd;
+  --ink:#1e1b17; --ink-dim:#6d655b; --ink-faint:#9a9086;
+  --gold:#b8860b; --gold-deep:#946a08; --hit:#12a35c; --miss:#d63a52;
+  --accent:#7c3aed; --accent2:#0b9ec2;
+  --glow:0 4px 16px rgba(124,58,237,.25);
+  --stage:#fffdfa; --stage-line:rgba(30,27,23,.055);
+}
+*{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg); color:var(--ink); overflow-x:hidden;
+  transition:background .18s ease, color .18s ease;
+}
+.wrap{max-width:1060px; margin:0 auto; padding:14px 14px 96px;}
+
+/* ---- bottom nav ---- */
+.bottomnav{
+  position:fixed; bottom:0; left:0; right:0; z-index:60;
+  display:flex; justify-content:space-around;
+  background:var(--bg); border-top:1px solid var(--line);
+  padding:7px 4px calc(9px + env(safe-area-inset-bottom,0px));
+}
+.bottomnav button{
+  background:none; border:0; color:var(--ink-faint); font-size:11px; font-weight:800;
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding:6px 16px; border-radius:14px; cursor:pointer; letter-spacing:.3px;
+}
+.bottomnav button.active{color:var(--accent);}
+.bottomnav button.active .ic{color:var(--accent);}
+
+/* ---- header ---- */
+header{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 2px 14px;}
+.logo{display:flex; align-items:center; gap:10px; font-weight:800; font-size:19px; letter-spacing:.2px;}
+.logo .mic-ic{width:32px;height:32px;border-radius:10px;background:var(--grad);
+  display:flex;align-items:center;justify-content:center;box-shadow:var(--glow);}
+.logo small{display:block;font-weight:500;font-size:10.5px;color:var(--ink-faint);letter-spacing:1px;}
+
+/* ---- hero / home ---- */
+.hero{background:var(--panel); border:1px solid var(--line);
+  border-radius:20px; padding:18px; position:relative; overflow:hidden;}
+.hero .kicker{font-size:10px; font-weight:900; letter-spacing:2px; color:var(--ink-faint);}
+.hero h2{font-size:21px; margin:5px 0 3px;}
+.hero .sub{font-size:12.5px; color:var(--ink-dim); font-weight:600;}
+.jsteps{display:flex; gap:7px; margin:14px 0;}
+.jstep{flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:13px;
+  padding:10px 5px; text-align:center; transition:all .2s;}
+.jstep .em{font-size:20px;}
+.jstep .jl{font-size:12px; font-weight:900; margin-top:2px;}
+.jstep .js{font-size:9.5px; color:var(--ink-faint); font-weight:700;}
+.jstep.done{background:var(--panel2); border-color:var(--hit);}
+.jstep.done .em::after{content:' ✓'; color:var(--hit);}
+.jstep.current{border-color:transparent; background:var(--grad); color:#fff; box-shadow:var(--glow);}
+.jstep.current .js{color:rgba(255,255,255,.8);}
+#btnJourney{
+  width:100%; border:0; border-radius:14px; padding:15px; font-size:16px; font-weight:900;
+  background:var(--grad); color:#fff; cursor:pointer; box-shadow:var(--glow);
+}
+#btnJourney:active{transform:scale(.985);}
+.mcard{
+  background:var(--panel); border:1px solid var(--line); border-radius:15px; padding:14px;
+  display:flex; align-items:center; gap:12px; cursor:pointer; transition:transform .1s;
+}
+.mcard:active{transform:scale(.98);}
+.mcard .mi{width:42px;height:42px;border-radius:13px;display:flex;align-items:center;
+  justify-content:center;flex:none;background:var(--grad);box-shadow:var(--glow);color:#fff;}
+.mcard h4{font-size:15px;margin:0 0 2px;}
+.mcard p{font-size:11.5px;color:var(--ink-faint);margin:0;line-height:1.4;}
+.mcard .chev{margin-left:auto;color:var(--ink-faint);font-size:17px;}
+.hue1 .mi,.hue2 .mi,.hue3 .mi,.hue4 .mi,.hue5 .mi{background:var(--grad);}
+.homegrid{display:grid; grid-template-columns:1fr; gap:8px; margin-top:10px;}
+.backpill{cursor:pointer; margin-bottom:10px;}
+
+/* ---- surfaces ---- */
+.tabs{display:flex; flex-wrap:wrap; gap:5px; background:var(--panel2); border:1px solid var(--line);
+  border-radius:12px; padding:4px;}
+.tabs button{border:0; background:transparent; color:var(--ink-dim); font-weight:700; font-size:13px;
+  padding:9px 14px; border-radius:9px; cursor:pointer; transition:all .15s;}
+.tabs button.active{background:var(--grad); color:#fff; box-shadow:var(--glow);}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px;}
+.row{display:flex; gap:9px; flex-wrap:wrap; align-items:center;}
+.grow{flex:1 1 auto;}
+select,button.btn,input[type="file"]{
+  background:var(--panel2); color:var(--ink); border:1px solid var(--line);
+  border-radius:11px; padding:10px 12px; font-size:14px; font-weight:600;
+}
+select{min-width:180px; cursor:pointer;}
+button.btn{cursor:pointer; transition:transform .06s;}
+button.btn:active{transform:scale(.97);}
+button.btn.primary{background:var(--grad); color:#fff; border:0; font-weight:800;
+  padding:11px 20px; box-shadow:var(--glow);}
+button.btn.play{font-size:15px;}
+button.btn.ghost{background:transparent;}
+button.btn.danger{color:var(--miss); border-color:var(--miss);}
+button.btn:disabled{opacity:.42; cursor:not-allowed;}
+button.btn.on{background:var(--grad); color:#fff; border-color:transparent; box-shadow:var(--glow);}
+.pill{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);
+  border-radius:999px;padding:6px 12px;font-size:12px;color:var(--ink-dim);font-weight:700;}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:var(--miss);}
+.pill .dot.on{background:var(--hit); box-shadow:0 0 8px var(--hit);}
+input[type="text"], textarea{
+  background:var(--panel2); color:var(--ink); border:1px solid var(--line);
+  border-radius:11px; padding:11px 12px; font-size:14px; font-weight:600; min-width:0;
+}
+
+/* ---- the numbers strip (slimmed: it sits UNDER the map now) ---- */
+.hud{display:flex; gap:6px; flex-wrap:nowrap; margin:10px 0;}
+/* one row, always — five boxes wrapping onto two lines was the old clutter */
+.stat{flex:1 1 0; min-width:0; background:var(--panel); border:1px solid var(--line);
+  border-radius:12px; padding:8px 4px; text-align:center;}
+.stat .v{font-size:15.5px; font-weight:800; letter-spacing:.2px; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;}
+.stat .l{font-size:8px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.8px;
+  margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.stat .v.gold{color:var(--gold);}
+.stat .v.green{color:var(--hit);}
+.stat .v.blue{color:var(--accent2);}
+
+/* ---- the stage ---- */
+#stage{position:relative; border-radius:var(--radius); overflow:hidden; border:1px solid var(--line);
+  background:var(--stage);}
+body.light #stage{box-shadow:0 3px 14px rgba(30,27,23,.07);}
+#gameCanvas{display:block; width:100%; touch-action:none;}
+#lyricsBar{background:var(--panel); border-top:1px solid var(--line);
+  padding:13px 12px 15px; text-align:center; min-height:80px;}
+#lyricNow{font-size:22px; font-weight:800; line-height:1.35; min-height:32px;}
+#lyricNow .sung{color:var(--ink-faint);}
+#lyricNow .cur{color:var(--gold); border-bottom:3px solid var(--gold); border-radius:2px;}
+body:not(.light) #lyricNow .cur{text-shadow:0 0 14px rgba(255,201,77,.7);}
+#lyricNow .rest{color:var(--ink-dim);}
+#lyricNext{font-size:14px; color:var(--ink-faint); margin-top:6px; font-weight:600;}
+
+/* ---- controls (now inside a fold-away) ---- */
+.controls{margin-top:12px;}
+.ctl-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:8px;}
+.ctl{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:10px 12px;}
+.ctl label{display:flex; justify-content:space-between; font-size:12px; color:var(--ink-faint);
+  font-weight:700; margin-bottom:6px; letter-spacing:.3px;}
+.ctl label output{color:var(--ink); font-weight:800;}
+input[type=range]{width:100%; accent-color:var(--accent); height:24px;}
+.switch{display:flex; align-items:center; justify-content:space-between; gap:10px;
+  font-size:13px; font-weight:700; color:var(--ink-dim);}
+.switch input{transform:scale(1.3); accent-color:var(--accent);}
+.micmeter{height:8px; border-radius:99px; background:var(--panel2); overflow:hidden; margin-top:8px;
+  border:1px solid var(--line);}
+.micmeter i{display:block; height:100%; width:0%; background:var(--grad); transition:width .06s linear;}
+
+/* ---- fold-aways ---- */
+details.fold{margin-top:10px; background:var(--panel); border:1px solid var(--line); border-radius:13px;}
+details.fold > summary{list-style:none; cursor:pointer; padding:13px 14px; font-weight:700;
+  font-size:13.5px; color:var(--ink-dim); display:flex; justify-content:space-between; align-items:center;}
+details.fold > summary::-webkit-details-marker{display:none;}
+details.fold > summary::after{content:'⌄'; font-size:15px; color:var(--ink-faint);}
+details.fold[open] > summary::after{content:'⌃';}
+details.fold .foldin{padding:0 14px 14px;}
+
+/* ---- song key panel ---- */
+.keypanel{background:var(--panel); border:1px solid var(--line); border-radius:13px;
+  padding:12px 13px; margin-top:10px;}
+.keypanel .ktop{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:9px; gap:8px;}
+.keypanel .kt{font-size:13.5px; font-weight:800;}
+.keypanel .kn{font-size:11.5px; color:var(--ink-faint); text-align:right;}
+.keypanel .kbtns{display:flex; gap:8px;}
+.keypanel .kbtns button{flex:1; background:var(--panel2); border:1px solid var(--line); color:var(--ink);
+  font-weight:700; font-size:13px; padding:12px 8px; border-radius:11px; cursor:pointer;}
+.keypanel .kbtns button:active{transform:scale(.97);}
+
+/* ---- results ---- */
+#results{position:absolute; inset:0; background:rgba(6,7,12,.9); backdrop-filter:blur(6px);
+  display:none; align-items:center; justify-content:center; z-index:20;}
+body.light #results{background:rgba(246,241,235,.93);}
+#results .card{background:var(--panel); border:1px solid var(--line); border-radius:18px;
+  padding:24px 28px; text-align:center; max-width:420px; width:90%;}
+#results .grade{font-size:60px; font-weight:900; background:var(--grad);
+  -webkit-background-clip:text; background-clip:text; color:transparent;}
+#results .score{font-size:19px; font-weight:800; margin:6px 0 2px;}
+#results .sub{color:var(--ink-dim); font-size:13px; margin-bottom:16px;}
+.notice{font-size:12.5px; color:var(--ink-faint); line-height:1.5; margin-top:10px;}
+.notice b{color:var(--gold);}
+.mode{display:none;}
+.mode.active{display:block;}
+
+/* ---- pitch monitor ---- */
+#freeCanvas{display:block;width:100%;border-radius:var(--radius);border:1px solid var(--line);
+  background:var(--stage);}
+body.light #freeCanvas{box-shadow:0 3px 14px rgba(30,27,23,.07);}
+#bigNote{font-size:52px;font-weight:800;text-align:center;min-width:130px;}
+#bigCents{text-align:center;font-size:13px;color:var(--ink-dim);font-weight:700;}
+audio{width:100%; margin-top:10px; border-radius:10px;}
+h3{font-size:15px; margin-bottom:8px;}
+.startOverlay{position:absolute; inset:0; z-index:15; display:flex; flex-direction:column; gap:12px;
+  align-items:center; justify-content:center; background:rgba(6,7,12,.78); backdrop-filter:blur(3px);
+  text-align:center; padding:20px;}
+body.light .startOverlay{background:rgba(246,241,235,.9);}
+.startOverlay p{color:var(--ink-dim); font-size:13px; max-width:420px; line-height:1.5;}
+.countdown{position:absolute; inset:0; z-index:14; display:none; align-items:center; justify-content:center;
+  font-size:104px; font-weight:900; color:var(--gold); pointer-events:none;}
+body:not(.light) .countdown{text-shadow:0 0 40px rgba(255,201,77,.5);}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:12px;}
+.card2{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:15px;
+  display:flex;flex-direction:column;gap:8px;}
+.card2 h3{margin:0;font-size:15px;}
+.card2 p{font-size:12.5px;color:var(--ink-faint);line-height:1.45;flex:1;}
+.card2 button{align-self:flex-start;}
+.card2.game{border-color:var(--line);background:var(--panel);}
+.ytwrap{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:var(--radius);
+  overflow:hidden;border:1px solid var(--line);}
+.ytwrap iframe, #ytPlayer{position:absolute;inset:0;width:100%;height:100%;border:0;}
+
+/* ---- library ---- */
+.librow{display:flex;align-items:center;gap:11px;padding:12px 10px;border-bottom:1px solid var(--line);}
+.librow:last-child{border-bottom:0;}
+.librow.playing{background:var(--panel2);}
+.librow .meta{flex:1;min-width:0;cursor:pointer;}
+.librow .t{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.librow .a{font-size:11.5px;color:var(--ink-faint);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;margin-top:2px;}
+.librow .keybadge{font-size:9.5px;font-weight:800;color:var(--gold);border:1px solid var(--gold);
+  border-radius:6px;padding:2px 6px;}
+.libart{width:42px;height:42px;border-radius:11px;flex:none;background:var(--panel2);
+  border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--accent);}
+.libtag{font-size:9.5px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:6px;
+  border:1px solid;display:inline-block;margin-left:6px;vertical-align:middle;}
+.libtag.map{color:var(--hit);border-color:var(--hit);}
+.libtag.nomap{color:var(--ink-faint);border-color:var(--line);}
+.libtag.take{color:var(--accent);border-color:var(--accent);}
+.libacts{background:var(--panel2);border-top:1px solid var(--line);padding:11px 12px;
+  display:flex;gap:7px;flex-wrap:wrap;}
+.libacts button{background:var(--panel);border:1px solid var(--line);color:var(--ink);font-weight:700;
+  font-size:12.5px;padding:10px 13px;border-radius:10px;cursor:pointer;}
+.libacts button.p{background:var(--grad);border-color:transparent;color:#fff;box-shadow:var(--glow);}
+.iconbtn{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:9px;
+  padding:8px 10px;cursor:pointer;font-size:13px;line-height:1;}
+.iconbtn:active{transform:scale(.94);}
+.playerbar{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:10px 12px;margin-top:10px;position:sticky;bottom:8px;z-index:30;
+  box-shadow:0 -4px 24px rgba(0,0,0,.35);}
+body.light .playerbar{box-shadow:0 -4px 20px rgba(30,27,23,.10);}
+.playerbar .title{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pbtn{background:none;border:0;color:var(--ink);font-size:21px;cursor:pointer;padding:4px 8px;}
+.pbtn.small{font-size:15px;color:var(--ink-dim);}
+.pbtn.on{color:var(--accent);}
+#libSeek{width:100%;}
+#libLyric{text-align:center;font-size:16px;font-weight:700;min-height:22px;color:var(--gold);}
+#libLyricNext{text-align:center;font-size:12.5px;color:var(--ink-faint);min-height:16px;}
+.emptybox{text-align:center;padding:28px 16px;color:var(--ink-faint);font-size:13.5px;line-height:1.6;}
+.libfoot{font-size:11.5px;color:var(--ink-faint);text-align:center;margin-top:12px;}
+
+/* ---- misc ---- */
+h2,h3,h4,.logo,.hero h2,.stat .v,#bigNote,#ytNote,#matchTarget,#susTarget,#resGrade{
+  font-family:'Sora','Inter',-apple-system,sans-serif;}
+.ic{width:1.05em;height:1.05em;stroke:currentColor;fill:none;stroke-width:2.1;stroke-linecap:round;
+  stroke-linejoin:round;vertical-align:-0.16em;display:inline-block;}
+.pbtn .ic{width:20px;height:20px;}
+.mi .ic, .jstep .em .ic{color:#fff;}
+.card2 .cardic{color:var(--accent);margin-bottom:2px;}
+.bottomnav .ni .ic{width:20px;height:20px;}
+#themeBtn{background:var(--panel2);border:1px solid var(--line);color:var(--ink-dim);
+  border-radius:999px;width:34px;height:34px;font-size:15px;cursor:pointer;flex:none;}
+@media (max-width:560px){
+  /* the header has to hold: brand, Hear me, theme, mic chip. The tagline is
+     the one thing nobody needs while singing. */
+  .logo small{display:none;}
+  .logo{font-size:16px;gap:8px;}
+  #btnMonitor{padding:7px 9px !important;font-size:11.5px !important;margin-right:4px !important;}
+  #micPillTop{padding:6px 9px;font-size:11px;}
+  #themeBtn{width:31px;height:31px;font-size:14px;}
+}
+@media (max-width:640px){
+  .logo{font-size:16px;}
+  #lyricNow{font-size:19px;}
+  .stat .v{font-size:17px;}
+  .tabs button{padding:8px 10px; font-size:12px;}
+}
 </style>
 </head>
 <body>
@@ -516,7 +613,7 @@
             <button class="btn danger ghost" id="btnMatchQuit">Quit</button>
           </div>
         </div>
-        <canvas id="matchCanvas" style="flex:1;min-width:200px;border-radius:12px;background:#0b0d13;border:1px solid var(--line)"></canvas>
+        <canvas id="matchCanvas" style="flex:1;min-width:200px;border-radius:12px;background:#0d1126;border:1px solid var(--line)"></canvas>
       </div>
       <div class="micmeter" style="margin-top:10px"><i id="matchHold"></i></div>
       <div class="notice">Hold the note in the green zone to fill the bar. Any octave counts — sing it where your voice is comfortable.</div>
@@ -1500,6 +1597,7 @@ function applyAudioLock(){
 $('songSel').addEventListener('change', ()=>{
   stopRun();
   mapPreviewStop();
+  try{ keyLabel(); }catch(e){}
   const v = String($('songSel').value);
   if(v.startsWith('lib:')){
     SONGLIB.song = LIB.songs.find(x=>x.id===v.slice(4)) || null;
@@ -1841,7 +1939,7 @@ function drawKeyRail(c2, H, lo, hi, yOf, liveM){
   const rowH = Math.abs(yOf(lo) - yOf(lo+1));
   if(!(rowH > 0.5)) return;
   c2.save();
-  c2.fillStyle = '#0b0d13';
+  c2.fillStyle = PAL.railBg;
   c2.fillRect(0, 0, KEYW, H);
   const m0 = Math.ceil(lo), m1 = Math.floor(hi);
   const liveKey = (liveM===null || liveM===undefined) ? null : Math.round(liveM);
@@ -1853,14 +1951,14 @@ function drawKeyRail(c2, H, lo, hi, yOf, liveM){
       const live = liveKey===m;
       const kh = Math.max(2, rowH-1);
       if(black){
-        c2.fillStyle = live ? '#f2c14e' : '#232838';
+        c2.fillStyle = live ? (isLight() ? '#7c3aed' : '#f2c14e') : PAL.keyB;
         c2.fillRect(0, y-kh/2, KEYW*0.58, kh);
       } else {
-        c2.fillStyle = live ? '#f2c14e' : '#dfe4f2';
+        c2.fillStyle = live ? (isLight() ? '#7c3aed' : '#f2c14e') : PAL.keyW;
         c2.fillRect(0, y-kh/2, KEYW-2, kh);
         const pc = ((m%12)+12)%12;
         if(rowH >= 9 || pc===0){
-          c2.fillStyle = live ? '#231a00' : (pc===0 ? '#8a6d1d' : '#4a5165');
+          c2.fillStyle = live ? PAL.keyLitInk : (pc===0 ? PAL.keyWC : PAL.keyWInk);
           c2.font = (pc===0 ? 'bold ' : '') + '9px sans-serif';
           c2.textAlign = 'right'; c2.textBaseline = 'middle';
           c2.fillText(midiName(m), KEYW-5, y);
@@ -1869,7 +1967,7 @@ function drawKeyRail(c2, H, lo, hi, yOf, liveM){
       }
     }
   }
-  c2.strokeStyle = 'rgba(255,255,255,.14)';
+  c2.strokeStyle = PAL.railEdge;
   c2.beginPath(); c2.moveTo(KEYW-0.5, 0); c2.lineTo(KEYW-0.5, H); c2.stroke();
   c2.restore();
 }
@@ -1881,6 +1979,58 @@ function laneWindow(cnv, center){
     w = cnv._pmWin = {lo: Math.floor(center-9), hi: Math.ceil(center+9)};
   }
   return w;
+}
+
+/* ---- one palette for everything drawn on canvas -------------------------
+   CSS can't reach inside a <canvas>, so the note map needs its own colours.
+   Dark mode glows. Light mode does not — glow needs black behind it — so the
+   notes carry the brand gradient instead, and the singer's own line gets a
+   different gradient so it can never be mistaken for a target. ---------- */
+function isLight(){ return document.body.classList.contains('light'); }
+
+const PAL = {
+  get stage(){ return isLight() ? '#fffdfa' : '#05060a'; },
+  get lane(){ return isLight() ? 'rgba(30,27,23,.055)' : 'rgba(255,255,255,.05)'; },
+  get laneC(){ return isLight() ? 'rgba(139,92,246,.28)' : 'rgba(255,201,77,.22)'; },
+  get now(){ return isLight() ? '#7c3aed' : 'rgba(139,108,255,.85)'; },
+  get railBg(){ return isLight() ? '#f4efe8' : '#04050a'; },
+  get railEdge(){ return isLight() ? 'rgba(30,27,23,.14)' : 'rgba(255,255,255,.14)'; },
+  get keyW(){ return isLight() ? '#ffffff' : '#dfe4f2'; },
+  get keyWInk(){ return isLight() ? '#6d655b' : '#4a5165'; },
+  get keyWC(){ return isLight() ? '#8b5cf6' : '#8a6d1d'; },
+  get keyB(){ return isLight() ? '#3a3430' : '#232838'; },
+  get keyLitInk(){ return isLight() ? '#ffffff' : '#231a00'; },
+  get words(){ return isLight() ? 'rgba(255,253,250,.92)' : 'rgba(4,5,10,.75)'; },
+  get wordInk(){ return isLight() ? '#4a443c' : '#e8ecff'; },
+  get wordPast(){ return isLight() ? '#b3aaa0' : 'rgba(154,163,207,.4)'; },
+  get wordNow(){ return isLight() ? '#7c3aed' : '#ffd166'; },
+  get hit(){ return isLight() ? 'rgba(18,163,92,.30)' : 'rgba(61,220,132,.35)'; },
+  get hitEdge(){ return isLight() ? 'rgba(18,163,92,.55)' : 'rgba(61,220,132,.5)'; },
+  get miss(){ return isLight() ? 'rgba(214,58,82,.22)' : 'rgba(255,93,115,.28)'; },
+  get barEdge(){ return isLight() ? 'rgba(139,92,246,.40)' : 'rgba(124,108,255,.55)'; },
+  get trace(){ return isLight() ? '#2563eb' : 'rgba(34,224,255,.95)'; },
+  get traceGlow(){ return isLight() ? null : 'rgba(34,224,255,.7)'; },
+  get traceOutline(){ return isLight() ? 'rgba(255,255,255,.9)' : null; },
+  get blip(){ return isLight() ? '#7c3aed' : '#22e0ff'; }
+};
+
+/* the brand gradient, painted along a note bar */
+function gradBar(c2, x, y, w, h, strong){
+  const g = c2.createLinearGradient(x, y, x + w, y + h);
+  if(strong){
+    g.addColorStop(0, '#8b5cf6'); g.addColorStop(0.52, '#3b82f6'); g.addColorStop(1, '#ec4899');
+  } else {
+    g.addColorStop(0, 'rgba(139,92,246,.34)');
+    g.addColorStop(0.52, 'rgba(59,130,246,.34)');
+    g.addColorStop(1, 'rgba(236,72,153,.34)');
+  }
+  return g;
+}
+/* the singer's own line — deliberately a different gradient from the notes */
+function gradTrace(c2, x0, x1){
+  const g = c2.createLinearGradient(x0, 0, x1, 0);
+  g.addColorStop(0, '#0b9ec2'); g.addColorStop(0.5, '#2563eb'); g.addColorStop(1, '#7c3aed');
+  return g;
 }
 
 function foldToRange(m, lo, hi){
@@ -1928,12 +2078,12 @@ function drawGame(){
   for(let m=Math.ceil(lo); m<=hi; m++){
     const pc = ((m%12)+12)%12;
     const isC = pc===0, natural=[0,2,4,5,7,9,11].includes(pc);
-    cx2.strokeStyle = isC ? 'rgba(255,209,102,.25)' : (natural?'rgba(255,255,255,.06)':'rgba(255,255,255,.025)');
+    cx2.strokeStyle = isC ? PAL.laneC : (natural ? PAL.lane : PAL.lane);
     cx2.beginPath(); cx2.moveTo(0, yOf(m)); cx2.lineTo(W, yOf(m)); cx2.stroke();
 
   }
   // now line
-  cx2.strokeStyle='rgba(124,108,255,.8)'; cx2.lineWidth=2;
+  cx2.strokeStyle=PAL.now; cx2.lineWidth=2;
   cx2.beginPath(); cx2.moveTo(nowX,0); cx2.lineTo(nowX,H); cx2.stroke();
   cx2.lineWidth=1;
 
@@ -1954,7 +2104,8 @@ function drawGame(){
     const active = beat>=n.t && beat<=n.t+n.d;
     cx2.beginPath();
     if (cx2.roundRect) cx2.roundRect(x, y, w, h, h/2); else cx2.rect(x,y,w,h);
-    cx2.fillStyle = past ? (ratio>=0.5? 'rgba(61,220,132,.35)':'rgba(255,93,115,.28)') : 'rgba(46,53,72,.96)';
+    cx2.fillStyle = past ? (ratio>=0.5 ? PAL.hit : PAL.miss)
+      : (isLight() ? gradBar(cx2, x, y, w, h, false) : 'rgba(46,53,72,.96)');
     cx2.fill();
     if(ratio>0){ // gold fill for on-pitch portion
       cx2.save(); cx2.beginPath();
@@ -1964,15 +2115,24 @@ function drawGame(){
       cx2.fillRect(x, y, w*Math.min(1,ratio), h);
       cx2.restore();
     }
-    cx2.strokeStyle = active? '#ffd166' : 'rgba(124,108,255,.55)';
+    if(active && isLight()){
+      cx2.save();
+      cx2.beginPath();
+      if (cx2.roundRect) cx2.roundRect(x, y, w, h, h/2); else cx2.rect(x,y,w,h);
+      cx2.fillStyle = gradBar(cx2, x, y, w, h, true);
+      cx2.fill();
+      cx2.restore();
+    }
+    cx2.strokeStyle = active ? (isLight() ? '#ffffff' : '#ffd166') : PAL.barEdge;
     cx2.lineWidth = active?2.5:1.2;
-    if(active){ cx2.shadowColor='#ffd166'; cx2.shadowBlur=12; }
+    if(active && !isLight()){ cx2.shadowColor='#ffd166'; cx2.shadowBlur=12; }
     cx2.beginPath();
     if (cx2.roundRect) cx2.roundRect(x, y, w, h, h/2); else cx2.rect(x,y,w,h);
     cx2.stroke();
     cx2.shadowBlur=0; cx2.lineWidth=1;
     if(w>30 && h>=15){
-      cx2.fillStyle = ratio>0.35? '#231a00':'#cdd4ff';
+      cx2.fillStyle = isLight() ? (ratio>0.35 ? '#231a00' : '#2f2a45')
+                                : (ratio>0.35 ? '#231a00' : '#cdd4ff');
       cx2.font='bold 11px sans-serif';
       cx2.fillText(midiName(m), x+8, y+h/2+4);
     }
@@ -1981,7 +2141,7 @@ function drawGame(){
   // the words, under the note they are sung on, scrolling with them
   cx2.save();
   cx2.beginPath(); cx2.rect(0, HN, W, LYH); cx2.clip();
-  cx2.fillStyle = 'rgba(8,10,28,.55)'; cx2.fillRect(0, HN, W, LYH);
+  cx2.fillStyle = PAL.words; cx2.fillRect(0, HN, W, LYH);
   cx2.strokeStyle = 'rgba(255,255,255,.08)';
   cx2.beginPath(); cx2.moveTo(0, HN+0.5); cx2.lineTo(W, HN+0.5); cx2.stroke();
   cx2.font = 'bold 14px sans-serif';
@@ -1997,8 +2157,8 @@ function drawGame(){
     if(x < lastRight + 5) x = lastRight + 5;      // never let syllables collide
     const past = beat > n.t+n.d;
     const live = beat >= n.t-0.15 && beat <= n.t+n.d;
-    cx2.fillStyle = live ? '#ffd166' : (past ? 'rgba(154,163,207,.4)' : '#e8ecff');
-    if(live){ cx2.shadowColor = '#ffd166'; cx2.shadowBlur = 10; }
+    cx2.fillStyle = live ? PAL.wordNow : (past ? PAL.wordPast : PAL.wordInk);
+    if(live && !isLight()){ cx2.shadowColor = '#ffd166'; cx2.shadowBlur = 10; }
     cx2.fillText(ly, x, wordY);
     cx2.shadowBlur = 0;
     lastRight = x + cx2.measureText(ly).width;
@@ -2022,15 +2182,22 @@ function drawGame(){
       const y = yOf(disp);
       if(!started){ cx2.moveTo(x,y); started=true; } else cx2.lineTo(x,y);
     }
-    cx2.strokeStyle='rgba(76,201,240,.9)'; cx2.lineWidth=2.5;
-    cx2.shadowColor='rgba(76,201,240,.8)'; cx2.shadowBlur=8;
-    cx2.stroke();
+    if(isLight()){
+      cx2.strokeStyle='rgba(255,255,255,.9)'; cx2.lineWidth=6; cx2.stroke();
+      cx2.strokeStyle=gradTrace(cx2, 0, W); cx2.lineWidth=3.5; cx2.stroke();
+    } else {
+      cx2.strokeStyle=PAL.trace; cx2.lineWidth=2.5;
+      cx2.shadowColor=PAL.traceGlow; cx2.shadowBlur=8;
+      cx2.stroke();
+    }
     cx2.shadowBlur=0; cx2.lineWidth=1;
     const lastPt = [...G.trail].reverse().find(p=>p.m!==null);
     if(lastPt && beat-lastPt.b < 0.5){
       const disp = state.octaveEquiv? foldToRange(lastPt.m, lo, hi) : lastPt.m;
       cx2.beginPath(); cx2.arc(nowX, yOf(disp), 6, 0, Math.PI*2);
-      cx2.fillStyle='#4cc9f0'; cx2.shadowColor='#4cc9f0'; cx2.shadowBlur=14; cx2.fill(); cx2.shadowBlur=0;
+      cx2.fillStyle=PAL.blip;
+      if(isLight()){ cx2.fill(); cx2.strokeStyle='#fff'; cx2.lineWidth=2; cx2.stroke(); cx2.lineWidth=1; }
+      else { cx2.shadowColor='#22e0ff'; cx2.shadowBlur=14; cx2.fill(); cx2.shadowBlur=0; }
       G.liveKeyM = disp;
       cx2.font = 'bold 10px sans-serif';
       cx2.fillStyle = 'rgba(238,241,247,.8)';
@@ -2342,7 +2509,7 @@ function drawPitchLane(c2, cnv, trail, now, key){
       continue;
     }
     const isC=pc===0, nat=[0,2,4,5,7,9,11].includes(pc);
-    c2.strokeStyle = isC?'rgba(255,209,102,.3)':(nat?'rgba(255,255,255,.07)':'rgba(255,255,255,.03)');
+    c2.strokeStyle = isC ? PAL.laneC : PAL.lane;
     c2.beginPath(); c2.moveTo(0,yOf(m)); c2.lineTo(W,yOf(m)); c2.stroke();
   }
   const pps = W/7; // pixels per second
@@ -2353,9 +2520,15 @@ function drawPitchLane(c2, cnv, trail, now, key){
     const y = yOf(p.m);
     if(!started){ c2.moveTo(x,y); started=true; } else c2.lineTo(x,y);
   }
-  c2.strokeStyle='rgba(76,201,240,.95)'; c2.lineWidth=2.5;
-  c2.shadowColor='rgba(76,201,240,.7)'; c2.shadowBlur=8;
-  c2.stroke(); c2.shadowBlur=0; c2.lineWidth=1;
+  if(isLight()){
+    c2.strokeStyle='rgba(255,255,255,.9)'; c2.lineWidth=7; c2.stroke();
+    c2.strokeStyle=gradTrace(c2, 0, W); c2.lineWidth=4; c2.stroke();
+  } else {
+    c2.strokeStyle=PAL.trace; c2.lineWidth=2.5;
+    c2.shadowColor=PAL.traceGlow; c2.shadowBlur=8;
+    c2.stroke();
+  }
+  c2.shadowBlur=0; c2.lineWidth=1;
   const lastLive = trail.length && trail[trail.length-1].m!==null && now-trail[trail.length-1].t < 0.6
     ? trail[trail.length-1].m : null;
   drawKeyRail(c2, H, lo, hi, yOf, lastLive);
@@ -2908,7 +3081,7 @@ requestAnimationFrame(gameFrame);
    runs the melody analyser on a library track, right here on the device, and
    stores the result so it plays with full bubbles like a processed pack.      */
 const ANALYZE = { busy:false, worker:null };
-const APP_VERSION = 'v8.3 \u00b7 hear me';
+const APP_VERSION = 'v9 \u00b7 redesign';
 try{ console.log('Repertoire build', APP_VERSION); }catch(e){}
 window.addEventListener('DOMContentLoaded', ()=>{ const bt=document.getElementById('buildTag'); if(bt) bt.textContent = APP_VERSION; });
 
@@ -4464,6 +4637,7 @@ $('btnPlayAll').addEventListener('click', ()=>{
 
 /* ---- list rendering ---- */
 function libRender(){
+  setTimeout(()=>{ try{ libDecorate(); }catch(e){} }, 0);
   const list=visibleSongs();
   const box=$('libList');
   $('libEmpty').style.display = LIB.songs.length? 'none':'block';
@@ -4748,6 +4922,202 @@ $('btnMicRetry').addEventListener('click', async ()=>{
 $('micDevSel').addEventListener('change', ()=>startMic({deviceId: $('micDevSel').value || null}));
 $('btnMonitor').addEventListener('click', monitorToggle);
 window.addEventListener('DOMContentLoaded', monitorUi);
+/* ===================================================================
+   v9 layout — done by moving real DOM nodes at load, not by patching
+   HTML strings. Every element keeps its id, so all the existing code and
+   tests still find what they expect; only the order and the wrapping
+   changes. That is what makes a redesign this size survivable.
+   =================================================================== */
+
+/* ---------- light / dark ---------- */
+function themeApply(light){
+  document.body.classList.toggle('light', !!light);
+  const b = document.getElementById('themeBtn');
+  if(b){ b.textContent = light ? '☀' : '☾'; b.title = light ? 'Switch to dark' : 'Switch to light'; }
+  try{ localStorage.setItem('rep_theme', light ? 'light' : 'dark'); }catch(e){}
+  // canvases are painted, not styled — they have to be redrawn by hand
+  try{ if(typeof sizeCanvas === 'function') sizeCanvas(); }catch(e){}
+  try{ if(typeof sizeFree === 'function' && state.mode === 'free') sizeFree(); }catch(e){}
+  try{ if(typeof drawGame === 'function' && state.mode !== 'free') drawGame(); }catch(e){}
+  try{ if(typeof sizeMatch === 'function') sizeMatch(); }catch(e){}
+}
+function themeInit(){
+  let want = null;
+  try{ want = localStorage.getItem('rep_theme'); }catch(e){}
+  themeApply(want === 'light');
+}
+
+/* ---------- helpers ---------- */
+function fold(title, nodes, open){
+  const d = document.createElement('details');
+  d.className = 'fold';
+  if(open) d.open = true;
+  const s = document.createElement('summary');
+  s.textContent = title;
+  d.appendChild(s);
+  const inner = document.createElement('div');
+  inner.className = 'foldin';
+  nodes.forEach(n => { if(n) inner.appendChild(n); });
+  d.appendChild(inner);
+  return d;
+}
+const $$ = id => document.getElementById(id);
+
+/* ---------- Song Trainer: the map goes to the top ---------- */
+function layoutSong(){
+  const mode = $$('modeSong'), stage = $$('sharedStage');
+  if(!mode || !stage) return;
+  const hud = stage.querySelector('.hud');
+  const stg = $$('stage');
+  const controls = stage.querySelector('.panel.controls');
+
+  // inside the stage block: canvas first, numbers under it
+  if(hud && stg && hud.compareDocumentPosition(stg) & Node.DOCUMENT_POSITION_FOLLOWING){
+    stage.insertBefore(stg, hud);
+  }
+
+  // the whole stage block goes above the pickers
+  const first = mode.querySelector('.backpill');
+  if(first && first.nextSibling !== stage) mode.insertBefore(stage, first.nextSibling);
+  else if(!first && mode.firstChild !== stage) mode.insertBefore(stage, mode.firstChild);
+
+  // "Song key" in plain words, in place of the transpose slider
+  if(!$$('keyPanel')){
+    const kp = document.createElement('div');
+    kp.className = 'keypanel';
+    kp.id = 'keyPanel';
+    kp.innerHTML =
+      '<div class="ktop"><div class="kt">Song key</div><div class="kn" id="keyNow">original key</div></div>' +
+      '<div class="kbtns">' +
+        '<button id="keyDown">&#9837; Move the song down</button>' +
+        '<button id="keyUp">&#9839; Move the song up</button>' +
+      '</div>' +
+      '<div class="notice" style="margin-top:8px">Use these if the notes feel too high or too low for ' +
+      'your voice. It moves the whole song, not just one note.</div>';
+    stage.appendChild(kp);
+    $$('keyDown').addEventListener('click', ()=>keyNudge(-1));
+    $$('keyUp').addEventListener('click', ()=>keyNudge(1));
+  }
+
+  // everything advanced folds away
+  if(controls && !$$('songSettings')){
+    const d = fold('Settings', [controls]);
+    d.id = 'songSettings';
+    stage.appendChild(d);
+  }
+}
+function keyNudge(dir){
+  const r = $$('rTrans');
+  if(!r) return;
+  let v = (+r.value || 0) + dir;
+  v = Math.max(-12, Math.min(12, v));
+  r.value = v;
+  r.dispatchEvent(new Event('input'));
+  keyLabel();
+}
+function keyLabel(){
+  const el = $$('keyNow'); if(!el) return;
+  const t = +($$('rTrans') || {value:0}).value || 0;
+  let base = '';
+  try{
+    const s = (typeof SONGLIB !== 'undefined' && SONGLIB.song && SONGLIB.song.key)
+      ? NOTE_NAMES[SONGLIB.song.key.root] + (SONGLIB.song.key.minor ? ' minor' : ' major') : '';
+    base = s ? 'now in ' + s + ' · ' : '';
+  }catch(e){}
+  el.textContent = base + (t === 0 ? 'original key'
+    : (t > 0 ? '+' + t : t) + ' from original');
+}
+
+/* ---------- Pitch Monitor: map first, numbers under ---------- */
+function layoutFree(){
+  const mode = $$('modeFree');
+  if(!mode || $$('freeSettings')) return;
+  const canvasWrap = $$('freeCanvas') ? $$('freeCanvas').parentElement : null;
+  const hud = mode.querySelector('.hud');
+  const panel = mode.querySelector('.panel');            // "sing over your own track"
+  const back = mode.querySelector('.backpill');
+  if(canvasWrap && back) mode.insertBefore(canvasWrap, back.nextSibling);
+  if(hud && canvasWrap) mode.insertBefore(hud, canvasWrap.nextSibling);
+  // the file loader + mic check fold away
+  const micPanel = $$('micCheck') ? $$('micCheck').closest('.panel') : null;
+  const bits = [];
+  if(panel) bits.push(panel);
+  const d = fold('Play a track & settings', bits);
+  d.id = 'freeSettings';
+  mode.appendChild(d);
+  if(micPanel){
+    const m = fold('Microphone', [micPanel]);
+    m.id = 'freeMic';
+    mode.appendChild(m);
+  }
+}
+
+/* ---------- Library: tags, inline actions, storage line ---------- */
+function libTagsFor(s){
+  let h = '';
+  if(s.kind === 'recording') h += '<span class="libtag take">YOUR VOICE</span>';
+  const mapped = !!(s.notes && s.notes.length) || (typeof findPackForSong === 'function' && findPackForSong(s));
+  h += mapped ? '<span class="libtag map">MAPPED</span>' : '<span class="libtag nomap">NO MAP</span>';
+  return h;
+}
+function libDecorate(){
+  const list = $$('libList');
+  if(!list) return;
+  list.querySelectorAll('.librow').forEach(row => {
+    if(row.dataset.v9) return;
+    row.dataset.v9 = '1';
+    const art = document.createElement('div');
+    art.className = 'libart';
+    art.innerHTML = '<svg class="ic" style="width:17px;height:17px"><use href="#i-music"/></svg>';
+    row.insertBefore(art, row.firstChild);
+  });
+  let foot = $$('libFoot');
+  if(!foot){
+    foot = document.createElement('div');
+    foot.id = 'libFoot'; foot.className = 'libfoot';
+    list.parentElement.appendChild(foot);
+  }
+  try{
+    const n = LIB.songs.length, takes = LIB.songs.filter(s=>s.kind==='recording').length;
+    foot.textContent = n + (n===1?' item':' items') + (takes ? ' · ' + takes + ' of them your takes' : '')
+      + ' · stored on this device';
+  }catch(e){ foot.textContent = ''; }
+}
+
+/* ---------- header: theme button ---------- */
+function layoutHeader(){
+  if($$('themeBtn')) return;
+  const pill = $$('micPillTop');
+  if(!pill || !pill.parentElement) return;
+  const b = document.createElement('button');
+  b.id = 'themeBtn'; b.type = 'button'; b.textContent = '☾';
+  b.addEventListener('click', ()=>themeApply(!document.body.classList.contains('light')));
+  pill.parentElement.insertBefore(b, pill);
+}
+
+function layoutV9(){
+  try{ layoutHeader(); }catch(e){}
+  try{ layoutSong(); }catch(e){}
+  try{ layoutFree(); }catch(e){}
+  try{ keyLabel(); }catch(e){}
+  try{ libDecorate(); }catch(e){}
+  try{ themeInit(); }catch(e){}
+}
+/* switchMode moves #sharedStage between screens and appends it at the end,
+   which undoes the "map at the top" ordering. Re-apply it after every
+   switch rather than fighting it. */
+if(typeof switchMode === 'function' && !window.__v9wrapped){
+  window.__v9wrapped = true;
+  const _switchMode = switchMode;
+  window.switchMode = function(m){
+    _switchMode(m);
+    try{ layoutSong(); layoutFree(); keyLabel(); }catch(e){}
+  };
+}
+if(document.readyState === 'loading')
+  window.addEventListener('DOMContentLoaded', layoutV9);
+else layoutV9();
+
 $('navHome').addEventListener('click', ()=>switchMode('home'));
 $('navTrain').addEventListener('click', ()=>switchMode('train'));
 $('navSing').addEventListener('click', ()=>switchMode('singhub'));
